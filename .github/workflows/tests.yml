@@ -1,0 +1,82 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.13.8"
+          python-version: "3.13"
+      - run: uv sync --only-group dev
+      - run: uv run --no-sync pre-commit run --all-files --show-diff-on-failure
+
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.13.8"
+          python-version: "3.13"
+      - run: uv sync --only-group dev
+      - run: uv build
+      - run: uv run --no-sync twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  compatibility:
+    name: Python ${{ matrix.python }} / Django ${{ matrix.django }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.10", django: "4.2" }
+          - { python: "3.11", django: "4.2" }
+          - { python: "3.11", django: "5.0" }
+          - { python: "3.13", django: "5.1" }
+          - { python: "3.10", django: "5.2" }
+          - { python: "3.11", django: "5.2" }
+          - { python: "3.13", django: "5.2" }
+          - { python: "3.12", django: "6.0" }
+          - { python: "3.12", django: "6.1" }
+          - { python: "3.14", django: "6.1" }
+          - { python: "3.15", django: "6.1" }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.13.8"
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+      - run: uv venv
+      - run: uv pip install dist/*.whl "Django~=${{ matrix.django }}.0"
+      - name: Check installed wheel outside the source directory
+        run: |
+          cp -R tests "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.venv/bin/python" -m django check --settings=tests.settings

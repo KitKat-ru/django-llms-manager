@@ -54,6 +54,7 @@ cover/
 
 # Translations
 *.mo
+!/llms_manager/locale/**/LC_MESSAGES/django.mo
 *.pot
 
 # Django stuff:
@@ -61,6 +62,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+/media/
 
 # Flask stuff:
 instance/

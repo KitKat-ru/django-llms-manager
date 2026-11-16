@@ -37,10 +37,21 @@ Issues = "https://github.com/KitKat-ru/django-llms-manager/issues"
 
 [dependency-groups]
 dev = [
+    { include-group = "test" },
     "pre-commit>=4.0",
     "ruff==0.16.10",
     "twine>=6.0",
 ]
+test = [
+    "pytest>=8.0,<10",
+    "pytest-django>=4.13,<5",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+testpaths = ["tests"]
+pythonpath = ["."]
+django_find_project = false
 
 [build-system]
 requires = ["uv_build>=0.13.8,<0.14"]
@@ -55,6 +66,10 @@ target-version = "py310"
 
 [tool.ruff.lint]
 extend-select = ["W", "I", "B", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+# Django migrations declare shared dependency and operation lists.
+"llms_manager/migrations/*.py" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["llms_manager"]

@@ -74,9 +74,12 @@ jobs:
           name: python-package-distributions
           path: dist/
       - run: uv venv
-      - run: uv pip install dist/*.whl "Django~=${{ matrix.django }}.0"
+      - run: uv pip install --group test dist/*.whl "Django~=${{ matrix.django }}.0"
       - name: Check installed wheel outside the source directory
         run: |
           cp -R tests "$RUNNER_TEMP/"
+          cp pyproject.toml "$RUNNER_TEMP/"
           cd "$RUNNER_TEMP"
           "$GITHUB_WORKSPACE/.venv/bin/python" -m django check --settings=tests.settings
+          "$GITHUB_WORKSPACE/.venv/bin/python" -m django makemigrations llms_manager --check --dry-run --settings=tests.settings
+          "$GITHUB_WORKSPACE/.venv/bin/python" -m pytest

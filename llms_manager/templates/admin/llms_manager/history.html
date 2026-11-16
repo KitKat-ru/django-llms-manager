@@ -1,0 +1,43 @@
+{% extends "admin/llms_manager/base.html" %}
+{% load admin_urls i18n %}
+
+{% block content %}
+  <ul class="object-tools">
+    <li><a href="{% url opts|admin_urlname:'editor' document_id=document.pk %}">{% translate "Editor" %}</a></li>
+  </ul>
+  <div class="module llms-history">
+    <table>
+      <thead>
+        <tr>
+          <th>{% translate "Revision" %}</th>
+          <th>{% translate "Created at" %}</th>
+          <th>{% translate "Created by" %}</th>
+          <th>{% translate "Publications" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for revision in page %}
+          <tr>
+            <td><a href="{% url opts|admin_urlname:'revision' document_id=document.pk revision_id=revision.pk %}">{{ revision }}</a></td>
+            <td>{{ revision.created_at }}</td>
+            <td>{{ revision.created_by|default:"—" }}</td>
+            <td>
+              {% for publication in revision.publications.all %}
+                <a href="{{ publication.get_absolute_url }}">{{ publication }}</a>{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">{% translate "No saved revisions." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <p class="paginator">
+      {% if page.has_previous %}<a href="?p={{ page.previous_page_number }}">{% translate "Previous" %}</a>{% endif %}
+      {{ page.number }} / {{ page.paginator.num_pages }}
+      {% if page.has_next %}<a href="?p={{ page.next_page_number }}">{% translate "Next" %}</a>{% endif %}
+    </p>
+  {% endif %}
+{% endblock %}

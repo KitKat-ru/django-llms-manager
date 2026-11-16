@@ -1,0 +1,82 @@
+{% extends "admin/change_form.html" %}
+{% load admin_modify admin_urls i18n %}
+
+{% block content %}
+  {% if has_change_permission or add %}
+    <div class="submit-row llms-publication-actions">
+      <input type="submit" form="{{ opts.model_name }}_form" name="_continue" value="{% translate 'Save address' %}">
+      <input type="submit" form="llms-publication-publish-form" value="{% translate 'Publish revision' %}" class="default"{% if not publish_form %} disabled{% endif %}>
+    </div>
+    {% if publish_form %}
+      <p>{% blocktranslate with document=candidate.document revision=candidate %}Ready to publish: {{ document }}, {{ revision }}.{% endblocktranslate %}</p>
+    {% elif address_pending and candidate %}
+      <p class="help">{% translate "Save the address to publish the selected revision." %}</p>
+    {% elif not is_published %}
+      <p class="help">{% translate "Select a document and review a revision. Save the address before publishing." %}</p>
+    {% endif %}
+  {% endif %}
+
+  {% if publish_form %}
+    <form method="post" id="llms-publication-publish-form" action="{% url opts|admin_urlname:'publish' publication_id=publication.pk %}">
+      {% csrf_token %}
+      {{ publish_form.as_p }}
+    </form>
+  {% endif %}
+
+  {{ block.super }}
+
+  {% if publication %}
+    <div class="module llms-publication">
+      {% if candidate %}
+        <h2>{{ candidate.document }}: {{ candidate }}</h2>
+        {% if is_published %}
+          <p>{% translate "This revision is currently published." %}</p>
+          <p><a href="{{ publication.get_absolute_url }}">{{ publication }}</a></p>
+        {% else %}
+          <h2>{% translate "Changes compared with the published revision" %}</h2>
+          {% if line_endings_only %}
+            <p>{% translate "Only line endings or the final newline differ." %}</p>
+          {% else %}
+            <div class="llms-diff">{{ diff }}</div>
+          {% endif %}
+        {% endif %}
+
+        <details{% if is_published %} open{% endif %}>
+          <summary>{% translate "Complete content" %}</summary>
+          <pre class="llms-content">{{ content }}</pre>
+        </details>
+
+        {% if can_edit_document %}
+          <p><a href="{% url 'admin:llms_manager_document_edit_revision' document_id=candidate.document_id revision_id=candidate.pk %}">{% translate "Edit as new revision" %}</a></p>
+        {% endif %}
+
+      {% elif not published and not add %}
+        <p>{% translate "No published revision. The public endpoint returns an empty file." %}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block after_field_sets %}
+  {{ block.super }}
+  {% if document_form %}
+    <div class="module">
+      <h2>{% translate "Revision selection" %}</h2>
+      {{ document_form.as_p }}
+      <button type="submit" name="select_document" value="1">{% translate "Show revisions" %}</button>
+      {% if revision_form %}
+        {{ revision_form.as_p }}
+        <button type="submit" name="show_diff" value="1">{% translate "Review revision" %}</button>
+      {% endif %}
+      {% if selected_document %}
+        <p><a href="{% url 'admin:llms_manager_document_revisions' document_id=selected_document.pk %}">{% translate "Revision history" %}</a></p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+  {% with show_save=False show_save_and_add_another=False show_save_and_continue=False %}
+    {% submit_row %}
+  {% endwith %}
+{% endblock %}

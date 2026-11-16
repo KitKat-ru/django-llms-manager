@@ -1,0 +1,27 @@
+{% extends "admin/llms_manager/base.html" %}
+{% load admin_urls i18n %}
+
+{% block content %}
+  <ul class="object-tools">
+    <li><a href="{% url opts|admin_urlname:'revisions' document_id=document.pk %}">{% translate "Revision history" %}</a></li>
+    <li><a href="{% url opts|admin_urlname:'history' object_id=document.pk %}">{% translate "Document history" %}</a></li>
+  </ul>
+
+  {% if has_change_permission %}
+    <form method="post" enctype="multipart/form-data" class="llms-editor">
+      {% csrf_token %}
+      <fieldset class="module aligned">
+        {{ upload_form.as_p }}
+        <button type="submit" name="import_file" value="1">{% translate "Load file into editor" %}</button>
+      </fieldset>
+      <fieldset class="module aligned">
+        {{ editor_form.as_p }}
+      </fieldset>
+      <div class="submit-row">
+        <input type="submit" name="save_revision" value="{% translate 'Save revision' %}" class="default">
+      </div>
+    </form>
+  {% else %}
+    <pre class="llms-content">{{ editor_form.content.value }}</pre>
+  {% endif %}
+{% endblock %}

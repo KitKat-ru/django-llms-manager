@@ -1,0 +1,25 @@
+{% extends "admin/llms_manager/base.html" %}
+{% load admin_urls i18n %}
+
+{% block content %}
+  <ul class="object-tools">
+    <li><a href="{% url opts|admin_urlname:'revisions' document_id=document.pk %}">{% translate "Revision history" %}</a></li>
+    <li><a href="{% url opts|admin_urlname:'preview' document_id=document.pk revision_id=revision.pk %}">{% translate "Plain text preview" %}</a></li>
+    {% if has_change_permission %}
+      <li><a href="{% url opts|admin_urlname:'edit_revision' document_id=document.pk revision_id=revision.pk %}">{% translate "Edit as new revision" %}</a></li>
+    {% endif %}
+  </ul>
+
+  <p>{{ revision.created_at }} &middot; {{ revision.created_by|default:"—" }}</p>
+  {% if publications %}
+    <h2>{% translate "Publications" %}</h2>
+    <ul>
+      {% for publication in publications %}
+        <li><a href="{{ publication.get_absolute_url }}">{{ publication }}</a></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>{% translate "Complete content" %}</h2>
+  <pre class="llms-content">{{ content }}</pre>
+{% endblock %}

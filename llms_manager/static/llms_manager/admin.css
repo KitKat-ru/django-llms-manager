@@ -1,0 +1,71 @@
+.llms-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  font-family: monospace;
+}
+
+.llms-editor fieldset {
+  padding: 16px;
+}
+
+.llms-history table {
+  width: 100%;
+}
+
+.llms-publication {
+  clear: both;
+}
+
+.llms-publication-actions {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.llms-publication-actions input {
+  margin: 0;
+}
+
+.llms-publication-actions input.default {
+  float: none;
+}
+
+.llms-publication-actions input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.llms-content,
+.llms-diff {
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--hairline-color);
+  background: var(--body-bg);
+  color: var(--body-fg);
+}
+
+.llms-diff table {
+  width: 100%;
+  font-family: monospace;
+}
+
+.llms-diff .diff_header,
+.llms-diff .diff_next {
+  background: var(--darkened-bg);
+}
+
+.llms-diff .diff_add {
+  background: #d8f3dc;
+  color: #143d23;
+}
+
+.llms-diff .diff_sub {
+  background: #fce0e0;
+  color: #651d1d;
+}
+
+.llms-diff .diff_chg {
+  background: #fff0b3;
+  color: #4d3800;
+}

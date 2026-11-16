@@ -1,0 +1,8 @@
+{% extends "admin/change_form.html" %}
+{% load admin_urls i18n %}
+
+{% block object-tools-items %}
+  <li><a href="{% url opts|admin_urlname:'editor' document_id=original.pk %}">{% translate "Editor" %}</a></li>
+  <li><a href="{% url opts|admin_urlname:'revisions' document_id=original.pk %}">{% translate "Revision history" %}</a></li>
+  {{ block.super }}
+{% endblock %}

@@ -1,0 +1,318 @@
+# English translations for django-llms-manager.
+# Copyright (C) 2026 Artem Fabrikov
+# This file is distributed under the MIT license.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: django-llms-manager\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-16 17:26+0300\n"
+"PO-Revision-Date: 2026-11-16 00:55+0300\n"
+"Last-Translator: django-llms-manager contributors\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: admin.py:42 admin.py:47
+#: templates/admin/llms_manager/document_change_form.html:5
+#: templates/admin/llms_manager/history.html:6
+msgid "Editor"
+msgstr "Editor"
+
+#: admin.py:147
+msgid "File loaded into the editor. Save it to create a revision."
+msgstr "File loaded into the editor. Save it to create a revision."
+
+#: admin.py:154
+msgid "Revision saved. Review it before publishing."
+msgstr "Revision saved. Review it before publishing."
+
+#: admin.py:174
+#, fuzzy, python-format
+#| msgid "document"
+msgid "Edit %(document)s"
+msgstr "document"
+
+#: admin.py:195 templates/admin/llms_manager/document_change_form.html:6
+#: templates/admin/llms_manager/editor.html:6
+#: templates/admin/llms_manager/publication_change_form.html:72
+#: templates/admin/llms_manager/revision.html:6
+msgid "Revision history"
+msgstr "Revision history"
+
+#: admin.py:252 forms.py:59
+#, fuzzy
+#| msgid "document"
+msgid "Document"
+msgstr "document"
+
+#: admin.py:381
+#, fuzzy
+#| msgid "published revision"
+msgid "No published revision"
+msgstr "published revision"
+
+#: admin.py:481
+msgid "Review the revision before publishing."
+msgstr "Review the revision before publishing."
+
+#: admin.py:495
+#, fuzzy, python-format
+#| msgid "Published revision %(number)s."
+msgid "Published %(document)s, revision %(number)s."
+msgstr "Published revision %(number)s."
+
+#: admin.py:509
+msgid "Revision published."
+msgstr "Revision published."
+
+#: forms.py:13
+msgid "Content"
+msgstr "Content"
+
+#: forms.py:17
+#, fuzzy
+#| msgid "The complete llms.txt document in Markdown."
+msgid "The complete document in Markdown."
+msgstr "The complete llms.txt document in Markdown."
+
+#: forms.py:26
+msgid "UTF-8 file"
+msgstr "UTF-8 file"
+
+#: forms.py:35
+msgid "Upload a UTF-8 text file."
+msgstr "Upload a UTF-8 text file."
+
+#: forms.py:68 templates/admin/llms_manager/history.html:12
+msgid "Revision"
+msgstr "Revision"
+
+#: models.py:32 models.py:33
+#, fuzzy
+#| msgid "llms.txt"
+msgid "llms"
+msgstr "llms.txt"
+
+#: models.py:35
+msgid "name"
+msgstr ""
+
+#: models.py:48
+msgid "revision"
+msgstr "revision"
+
+#: models.py:49
+msgid "revisions"
+msgstr "revisions"
+
+#: models.py:61
+msgid "document"
+msgstr "document"
+
+#: models.py:63
+msgid "number"
+msgstr ""
+
+#: models.py:67
+msgid "file"
+msgstr "file"
+
+#: models.py:69
+msgid "created at"
+msgstr "created at"
+
+#: models.py:76
+msgid "created by"
+msgstr "created by"
+
+#: models.py:80
+#, python-format
+msgid "Revision %(number)s"
+msgstr "Revision %(number)s"
+
+#: models.py:105
+msgid "Saved revisions cannot be edited. Create a new revision."
+msgstr "Saved revisions cannot be edited. Create a new revision."
+
+#: models.py:128
+#, fuzzy
+#| msgid "Publication log"
+msgid "publication"
+msgstr "Publication log"
+
+#: models.py:129
+#, fuzzy
+#| msgid "Publication log"
+msgid "publications"
+msgstr "Publication log"
+
+#: models.py:147
+msgid "directory"
+msgstr ""
+
+#: models.py:153
+#, fuzzy
+#| msgid "file"
+msgid "file name"
+msgstr "file"
+
+#: models.py:162
+msgid "published revision"
+msgstr "published revision"
+
+#: models.py:178
+msgid "Enter a directory path without dot segments or URL parameters."
+msgstr ""
+
+#: models.py:184
+msgid "The directory path is too long."
+msgstr ""
+
+#: models.py:207
+msgid "The published revision changed. Review the updated diff and try again."
+msgstr "The published revision changed. Review the updated diff and try again."
+
+#: templates/admin/llms_manager/base.html:11
+msgid "Home"
+msgstr "Home"
+
+#: templates/admin/llms_manager/editor.html:7
+#, fuzzy
+#| msgid "Revision history"
+msgid "Document history"
+msgstr "Revision history"
+
+#: templates/admin/llms_manager/editor.html:15
+msgid "Load file into editor"
+msgstr "Load file into editor"
+
+#: templates/admin/llms_manager/editor.html:21
+msgid "Save revision"
+msgstr "Save revision"
+
+#: templates/admin/llms_manager/history.html:13
+msgid "Created at"
+msgstr "Created at"
+
+#: templates/admin/llms_manager/history.html:14
+msgid "Created by"
+msgstr "Created by"
+
+#: templates/admin/llms_manager/history.html:15
+#: templates/admin/llms_manager/revision.html:15
+#, fuzzy
+#| msgid "Publication log"
+msgid "Publications"
+msgstr "Publication log"
+
+#: templates/admin/llms_manager/history.html:31
+msgid "No saved revisions."
+msgstr "No saved revisions."
+
+#: templates/admin/llms_manager/history.html:38
+msgid "Previous"
+msgstr "Previous"
+
+#: templates/admin/llms_manager/history.html:40
+msgid "Next"
+msgstr "Next"
+
+#: templates/admin/llms_manager/publication_change_form.html:7
+#, fuzzy
+#| msgid "Save revision"
+msgid "Save address"
+msgstr "Save revision"
+
+#: templates/admin/llms_manager/publication_change_form.html:8
+#, fuzzy
+#| msgid "Published revision"
+msgid "Publish revision"
+msgstr "Published revision"
+
+#: templates/admin/llms_manager/publication_change_form.html:11
+#, python-format
+msgid "Ready to publish: %(document)s, %(revision)s."
+msgstr ""
+
+#: templates/admin/llms_manager/publication_change_form.html:13
+msgid "Save the address to publish the selected revision."
+msgstr ""
+
+#: templates/admin/llms_manager/publication_change_form.html:15
+msgid ""
+"Select a document and review a revision. Save the address before publishing."
+msgstr ""
+
+#: templates/admin/llms_manager/publication_change_form.html:33
+msgid "This revision is currently published."
+msgstr "This revision is currently published."
+
+#: templates/admin/llms_manager/publication_change_form.html:36
+msgid "Changes compared with the published revision"
+msgstr "Changes compared with the published revision"
+
+#: templates/admin/llms_manager/publication_change_form.html:38
+msgid "Only line endings or the final newline differ."
+msgstr "Only line endings or the final newline differ."
+
+#: templates/admin/llms_manager/publication_change_form.html:45
+#: templates/admin/llms_manager/revision.html:23
+msgid "Complete content"
+msgstr "Complete content"
+
+#: templates/admin/llms_manager/publication_change_form.html:50
+#: templates/admin/llms_manager/revision.html:9
+msgid "Edit as new revision"
+msgstr "Edit as new revision"
+
+#: templates/admin/llms_manager/publication_change_form.html:54
+msgid "No published revision. The public endpoint returns an empty file."
+msgstr "No published revision. The public endpoint returns an empty file."
+
+#: templates/admin/llms_manager/publication_change_form.html:64
+#, fuzzy
+#| msgid "Revision history"
+msgid "Revision selection"
+msgstr "Revision history"
+
+#: templates/admin/llms_manager/publication_change_form.html:66
+#, fuzzy
+#| msgid "revisions"
+msgid "Show revisions"
+msgstr "revisions"
+
+#: templates/admin/llms_manager/publication_change_form.html:69
+#, fuzzy
+#| msgid "Save revision"
+msgid "Review revision"
+msgstr "Save revision"
+
+#: templates/admin/llms_manager/revision.html:7
+msgid "Plain text preview"
+msgstr "Plain text preview"
+
+#~ msgid "Edit llms.txt"
+#~ msgstr "Edit llms.txt"
+
+#~ msgid "llms.txt document"
+#~ msgstr "llms.txt document"
+
+#~ msgid "Preview published revision"
+#~ msgstr "Preview published revision"
+
+#, python-format
+#~ msgid "Published revision: %(number)s."
+#~ msgstr "Published revision: %(number)s."
+
+#~ msgid "Published"
+#~ msgstr "Published"
+
+#~ msgid "Yes"
+#~ msgstr "Yes"
+
+#~ msgid "Publish this revision"
+#~ msgstr "Publish this revision"

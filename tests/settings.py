@@ -51,6 +51,10 @@ TEMPLATES = [
 
 STATIC_URL = "/static/"
 
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 USE_TZ = True
+
+LANGUAGE_CODE = "ru"

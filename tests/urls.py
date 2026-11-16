@@ -1,9 +1,7 @@
 from django.contrib import admin
-from django.urls import path
-
-from tests.views import llms_txt
+from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("llms.txt", llms_txt, name="llms_txt"),
+    path("", include("llms_manager.urls")),
 ]

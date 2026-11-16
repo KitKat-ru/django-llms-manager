@@ -11,12 +11,12 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.8"
           python-version: "3.13"
@@ -25,12 +25,12 @@ jobs:
 
   build:
     name: Build distribution
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.8"
           python-version: "3.13"
@@ -45,27 +45,39 @@ jobs:
   compatibility:
     name: Python ${{ matrix.python }} / Django ${{ matrix.django }}
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
+        # All supported pairs for the Python and Django series declared by the package.
         include:
           - { python: "3.10", django: "4.2" }
+          - { python: "3.10", django: "5.0" }
+          - { python: "3.10", django: "5.1" }
+          - { python: "3.10", django: "5.2" }
           - { python: "3.11", django: "4.2" }
           - { python: "3.11", django: "5.0" }
-          - { python: "3.13", django: "5.1" }
-          - { python: "3.10", django: "5.2" }
+          - { python: "3.11", django: "5.1" }
           - { python: "3.11", django: "5.2" }
-          - { python: "3.13", django: "5.2" }
+          - { python: "3.12", django: "4.2" }
+          - { python: "3.12", django: "5.0" }
+          - { python: "3.12", django: "5.1" }
+          - { python: "3.12", django: "5.2" }
           - { python: "3.12", django: "6.0" }
           - { python: "3.12", django: "6.1" }
+          - { python: "3.13", django: "5.1" }
+          - { python: "3.13", django: "5.2" }
+          - { python: "3.13", django: "6.0" }
+          - { python: "3.13", django: "6.1" }
+          - { python: "3.14", django: "5.2" }
+          - { python: "3.14", django: "6.0" }
           - { python: "3.14", django: "6.1" }
           - { python: "3.15", django: "6.1" }
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.8"
           python-version: ${{ matrix.python }}

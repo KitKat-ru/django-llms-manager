@@ -10,6 +10,19 @@ publish a selected version at the site root or in a nested directory.
 Requires Python 3.10+ and Django 4.2+. Supported Python/Django combinations follow
 [Django's compatibility table](https://docs.djangoproject.com/en/stable/faq/install/#what-python-version-can-i-use-with-django).
 
+CI is configured to check all 22 officially supported combinations of the declared
+Python and Django series, using the latest available patch release of each Django
+series:
+
+| Python | Django series |
+| --- | --- |
+| 3.10 | 4.2, 5.0, 5.1, 5.2 |
+| 3.11 | 4.2, 5.0, 5.1, 5.2 |
+| 3.12 | 4.2, 5.0, 5.1, 5.2, 6.0, 6.1 |
+| 3.13 | 5.1, 5.2, 6.0, 6.1 |
+| 3.14 | 5.2, 6.0, 6.1 |
+| 3.15 | 6.1 |
+
 ## Setup
 
 To use a local checkout in an existing Django project managed with uv, add it as a

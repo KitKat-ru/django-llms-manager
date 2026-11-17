@@ -1,7 +1,13 @@
 # django-llms-manager
 
-[![Checks](https://github.com/KitKat-ru/django-llms-manager/actions/workflows/tests.yml/badge.svg)](https://github.com/KitKat-ru/django-llms-manager/actions/workflows/tests.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Tests](https://github.com/KitKat-ru/django-llms-manager/actions/workflows/tests.yml/badge.svg)](https://github.com/KitKat-ru/django-llms-manager/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/django-llms-manager)](https://pypi.org/project/django-llms-manager/)
+[![Downloads](https://img.shields.io/pypi/dm/django-llms-manager)](https://pypistats.org/packages/django-llms-manager)
+[![Python](https://img.shields.io/pypi/pyversions/django-llms-manager)](https://pypi.org/project/django-llms-manager/)
+[![Django](https://img.shields.io/pypi/frameworkversions/django/django-llms-manager)](https://pypi.org/project/django-llms-manager/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/KitKat-ru/django-llms-manager/blob/main/LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 Manage `llms.txt` and `llms-full.txt` content for AI assistants through the Django
 admin. Edit Markdown or import a UTF-8 file, save revisions, review changes, and

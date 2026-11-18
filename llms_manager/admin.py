@@ -84,7 +84,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
     def _url(self, action: str, **kwargs: int) -> str:
         return reverse(
-            viewname=f"{self.admin_site.name}:llms_manager_document_{action}",
+            f"{self.admin_site.name}:llms_manager_document_{action}",
             kwargs=kwargs,
         )
 
@@ -475,7 +475,7 @@ class PublicationAdmin(admin.ModelAdmin):
             raise PermissionDenied
 
         change_url = reverse(
-            viewname=f"{self.admin_site.name}:llms_manager_publication_change",
+            f"{self.admin_site.name}:llms_manager_publication_change",
             kwargs={"object_id": publication_id},
         )
         form = PublishForm(data=request.POST)

@@ -193,7 +193,7 @@ class Publication(models.Model):
         directory = self.directory.strip("/")
         if directory:
             kwargs["directory"] = directory
-        return reverse(viewname="llms_manager:publication", kwargs=kwargs)
+        return reverse("llms_manager:publication", kwargs=kwargs)
 
     def publish(self, *, revision: Revision, expected_revision_id: int | None) -> None:
         revision.read_content()

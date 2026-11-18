@@ -291,7 +291,6 @@ uv run python -m django makemessages -l en -l ru
 Edit `msgstr` values in `locale/*/LC_MESSAGES/django.po`. Review entries marked
 `fuzzy` and remove that flag after correcting their translations.
 [Django skips fuzzy entries during compilation](https://docs.djangoproject.com/en/stable/topics/i18n/translation/#message-files).
-Some Russian entries still need translation or review and fall back to English.
 
 Then compile the catalogs from the same directory:
 

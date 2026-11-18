@@ -6,3 +6,4 @@ class LlmsManagerConfig(AppConfig):
 
     default_auto_field = "django.db.models.BigAutoField"
     name = "llms_manager"
+    verbose_name = "LLMS"

@@ -59,7 +59,7 @@ msgstr "Review the revision before publishing."
 msgid "Published %(document)s, revision %(number)s."
 msgstr "Published %(document)s, revision %(number)s."
 
-#: admin.py:509
+#: admin.py:286
 msgid "Revision published."
 msgstr "Revision published."
 
@@ -83,9 +83,9 @@ msgstr "Upload a UTF-8 text file."
 msgid "Revision"
 msgstr "Revision"
 
-#: models.py:32 models.py:33
-msgid "llms"
-msgstr "llms.txt"
+#: models.py:30
+msgid "documents"
+msgstr "documents"
 
 #: models.py:35
 msgid "name"
@@ -99,7 +99,7 @@ msgstr "revision"
 msgid "revisions"
 msgstr "revisions"
 
-#: models.py:61
+#: models.py:29 models.py:61
 msgid "document"
 msgstr "document"
 
@@ -201,27 +201,18 @@ msgstr "Previous"
 msgid "Next"
 msgstr "Next"
 
-#: templates/admin/llms_manager/publication_change_form.html:7
-msgid "Save address"
-msgstr "Save address"
-
 #: templates/admin/llms_manager/publication_change_form.html:8
-msgid "Publish revision"
-msgstr "Publish revision"
+msgid "Save and publish"
+msgstr "Save and publish"
 
 #: templates/admin/llms_manager/publication_change_form.html:11
 #, python-format
 msgid "Ready to publish: %(document)s, %(revision)s."
 msgstr "Ready to publish: %(document)s, %(revision)s."
 
-#: templates/admin/llms_manager/publication_change_form.html:13
-msgid "Save the address to publish the selected revision."
-msgstr "Save the address to publish the selected revision."
-
 #: templates/admin/llms_manager/publication_change_form.html:15
-msgid ""
-"Select a document and review a revision. Save the address before publishing."
-msgstr "Select a document and review a revision. Save the address before publishing."
+msgid "Select a document and review a revision before publishing."
+msgstr "Select a document and review a revision before publishing."
 
 #: templates/admin/llms_manager/publication_change_form.html:33
 msgid "This revision is currently published."

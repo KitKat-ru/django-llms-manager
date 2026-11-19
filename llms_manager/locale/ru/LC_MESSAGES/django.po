@@ -61,7 +61,7 @@ msgstr "Просмотрите версию перед публикацией."
 msgid "Published %(document)s, revision %(number)s."
 msgstr "Опубликован документ %(document)s, версия %(number)s."
 
-#: admin.py:509
+#: admin.py:286
 msgid "Revision published."
 msgstr "Версия опубликована."
 
@@ -85,9 +85,9 @@ msgstr "Загрузите текстовый файл в кодировке UTF
 msgid "Revision"
 msgstr "Версия"
 
-#: models.py:32 models.py:33
-msgid "llms"
-msgstr "llms.txt"
+#: models.py:30
+msgid "documents"
+msgstr "документы"
 
 #: models.py:35
 msgid "name"
@@ -101,7 +101,7 @@ msgstr "версия"
 msgid "revisions"
 msgstr "версии"
 
-#: models.py:61
+#: models.py:29 models.py:61
 msgid "document"
 msgstr "документ"
 
@@ -205,27 +205,18 @@ msgstr "Назад"
 msgid "Next"
 msgstr "Далее"
 
-#: templates/admin/llms_manager/publication_change_form.html:7
-msgid "Save address"
-msgstr "Сохранить"
-
 #: templates/admin/llms_manager/publication_change_form.html:8
-msgid "Publish revision"
-msgstr "Опубликовать версию"
+msgid "Save and publish"
+msgstr "Сохранить и опубликовать"
 
 #: templates/admin/llms_manager/publication_change_form.html:11
 #, python-format
 msgid "Ready to publish: %(document)s, %(revision)s."
 msgstr "Готово к публикации: %(document)s, %(revision)s."
 
-#: templates/admin/llms_manager/publication_change_form.html:13
-msgid "Save the address to publish the selected revision."
-msgstr "Сохраните форму, чтобы опубликовать выбранную версию."
-
 #: templates/admin/llms_manager/publication_change_form.html:15
-msgid ""
-"Select a document and review a revision. Save the address before publishing."
-msgstr "Выберите документ и просмотрите версию. Перед публикацией сохраните форму."
+msgid "Select a document and review a revision before publishing."
+msgstr "Выберите документ и просмотрите версию перед публикацией."
 
 #: templates/admin/llms_manager/publication_change_form.html:33
 msgid "This revision is currently published."

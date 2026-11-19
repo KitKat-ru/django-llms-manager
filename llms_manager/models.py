@@ -26,8 +26,8 @@ class Document(models.Model):
     class Meta:
         """Set display names for the document model."""
 
-        verbose_name = _("llms")
-        verbose_name_plural = _("llms")
+        verbose_name = _("document")
+        verbose_name_plural = _("documents")
 
     name = models.CharField(max_length=255, verbose_name=_("name"))
 

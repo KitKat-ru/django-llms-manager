@@ -11,7 +11,7 @@ from django.db.models import Max
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-from llms_manager.exceptions import PublicationConflict
+from llms_manager.exceptions import PublicationConflict, RevisionFileError
 from llms_manager.utils import revision_upload_to
 
 if TYPE_CHECKING:
@@ -116,8 +116,15 @@ class Revision(models.Model):
             return super().save(*args, **kwargs)
 
     def read_content(self) -> str:
-        with self.file.open("rb") as revision_file:
-            return revision_file.read().decode("utf-8")
+        try:
+            if not self.file:
+                raise FileNotFoundError("The revision has no file.")
+            with self.file.storage.open(self.file.name, "rb") as revision_file:
+                return revision_file.read().decode("utf-8")
+        except (FileNotFoundError, UnicodeDecodeError) as error:
+            raise RevisionFileError(
+                _("The revision file is corrupted or missing.")
+            ) from error
 
 
 class Publication(models.Model):

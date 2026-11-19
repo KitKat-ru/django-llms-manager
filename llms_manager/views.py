@@ -1,10 +1,11 @@
 from hashlib import sha256
 
 from django.core.cache import cache
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_safe
 
+from llms_manager.exceptions import RevisionFileError
 from llms_manager.models import Publication
 from llms_manager.utils import get_cache_timeout
 
@@ -25,14 +26,20 @@ def published_file(request, filename: str, directory: str = "") -> HttpResponse:
     content = ""
     if revision is not None:
         timeout = get_cache_timeout()
-        if not timeout:
-            content = revision.read_content()
-        else:
-            file_key = sha256(revision.file.name.encode("utf-8")).hexdigest()
-            content = cache.get_or_set(
-                f"llms_manager:revision:{revision.pk}:{file_key}",
-                revision.read_content,
-                timeout=timeout,
+        try:
+            if not timeout:
+                content = revision.read_content()
+            else:
+                file_key = sha256(revision.file.name.encode("utf-8")).hexdigest()
+                content = cache.get_or_set(
+                    f"llms_manager:revision:{revision.pk}:{file_key}",
+                    revision.read_content,
+                    timeout=timeout,
+                )
+        except RevisionFileError:
+            return HttpResponseBadRequest(
+                "The revision file is corrupted or missing.",
+                content_type="text/plain; charset=utf-8",
             )
     return HttpResponse(
         content,

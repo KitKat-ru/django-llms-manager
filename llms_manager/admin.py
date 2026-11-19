@@ -1,5 +1,5 @@
 from difflib import HtmlDiff
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.contrib import admin, messages
@@ -7,7 +7,13 @@ from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
@@ -17,13 +23,9 @@ from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import (
-    require_http_methods,
-    require_POST,
-    require_safe,
-)
+from django.views.decorators.http import require_http_methods, require_safe
 
-from llms_manager.exceptions import PublicationConflict
+from llms_manager.exceptions import PublicationConflict, RevisionFileError
 from llms_manager.forms import (
     DocumentSelectionForm,
     EditorForm,
@@ -33,6 +35,16 @@ from llms_manager.forms import (
     UploadForm,
 )
 from llms_manager.models import Document, Publication, Revision
+
+
+def _read_revision_content(revision: Revision | None) -> tuple[str, str | None]:
+    """Read revision text or return an error for a missing or corrupted file."""
+    if revision is None:
+        return "", None
+    try:
+        return revision.read_content(), None
+    except RevisionFileError as error:
+        return "", str(error)
 
 
 @admin.register(Document)
@@ -135,6 +147,7 @@ class DocumentAdmin(admin.ModelAdmin):
             else None
         )
         upload_form = UploadForm()
+        file_error = None
 
         if request.method == "POST":
             editor_form = EditorForm(request.POST)
@@ -166,9 +179,8 @@ class DocumentAdmin(admin.ModelAdmin):
         else:
             if source is None:
                 source = document.revisions.first()
-            editor_form = EditorForm(
-                initial={"content": source.read_content() if source else ""}
-            )
+            content, file_error = _read_revision_content(source)
+            editor_form = EditorForm(initial={"content": content})
 
         return self._render(
             request,
@@ -178,6 +190,7 @@ class DocumentAdmin(admin.ModelAdmin):
                 "document": document,
                 "editor_form": editor_form,
                 "upload_form": upload_form,
+                "file_error": file_error,
             },
         )
 
@@ -207,6 +220,7 @@ class DocumentAdmin(admin.ModelAdmin):
     ) -> TemplateResponse:
         self._require_permission(request)
         revision = self._revision(document_id, revision_id)
+        content, file_error = _read_revision_content(revision)
         return self._render(
             request,
             "revision",
@@ -214,7 +228,8 @@ class DocumentAdmin(admin.ModelAdmin):
                 "title": str(revision),
                 "document": revision.document,
                 "revision": revision,
-                "content": revision.read_content(),
+                "content": content,
+                "file_error": file_error,
                 "publications": revision.publications.all(),
             },
         )
@@ -225,9 +240,13 @@ class DocumentAdmin(admin.ModelAdmin):
     ) -> HttpResponse:
         self._require_permission(request)
         revision = self._revision(document_id, revision_id)
-        return HttpResponse(
-            revision.read_content(), content_type="text/plain; charset=utf-8"
-        )
+        try:
+            content = revision.read_content()
+        except RevisionFileError as error:
+            return HttpResponseBadRequest(
+                str(error), content_type="text/plain; charset=utf-8"
+            )
+        return HttpResponse(content, content_type="text/plain; charset=utf-8")
 
 
 @admin.register(Publication)
@@ -290,68 +309,19 @@ class PublicationAdmin(admin.ModelAdmin):
             )
         )
 
-    def get_urls(self) -> list[URLPattern]:
-        return [
-            path(
-                "<int:publication_id>/publish/",
-                self.admin_site.admin_view(self.publish_view),
-                name="llms_manager_publication_publish",
-            )
-        ] + super().get_urls()
-
     def _can_view_documents(self, request: HttpRequest) -> bool:
         return request.user.has_perm(
             "llms_manager.view_document"
         ) or request.user.has_perm("llms_manager.change_document")
 
-    @method_decorator(csrf_protect)
-    def changeform_view(
+    def _get_selection_context(
         self,
         request: HttpRequest,
-        object_id: str | None = None,
-        form_url: str = "",
-        extra_context: dict[str, object] | None = None,
-    ) -> HttpResponse:
-        if object_id is None:
-            if not self.has_add_permission(request):
-                raise PermissionDenied
-            publication = Publication()
-        else:
-            publication = self.get_object(request, object_id)
-            if publication is None:
-                raise Http404
-            if not self.has_view_or_change_permission(request, obj=publication):
-                raise PermissionDenied
-
-        can_view_documents = self._can_view_documents(request)
-        if request.method == "POST" and not can_view_documents:
-            raise PermissionDenied
-        if request.method == "POST" and any(
-            key in request.POST for key in ("select_document", "show_diff")
-        ):
-            query = {
-                key: request.POST[key]
-                for key in (
-                    "directory",
-                    "filename",
-                    "document",
-                    "revision",
-                    "_popup",
-                    "_to_field",
-                )
-                if key in request.POST
-            }
-            page_action = (
-                "show_diff" if "show_diff" in request.POST else "select_document"
-            )
-            query[page_action] = "1"
-            return HttpResponseRedirect(f"{request.path}?{urlencode(query=query)}")
-
-        if request.method not in ("GET", "POST"):
-            return super().changeform_view(request, object_id, form_url, extra_context)
-
-        published = publication.revision
-        candidate = published
+        publication: Publication,
+        can_view_documents: bool,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Build document and revision selection forms and their current state."""
+        published = candidate = publication.revision
         document_form = None
         revision_form = None
         selected_document = None
@@ -395,37 +365,71 @@ class PublicationAdmin(admin.ModelAdmin):
                 )
                 if revision_form.is_bound and revision_form.is_valid():
                     candidate = revision_form.cleaned_data["revision"]
+        return selecting, {
+            "candidate": candidate,
+            "document_form": document_form,
+            "revision_form": revision_form,
+            "selected_document": selected_document,
+        }
 
-        content = candidate.read_content() if candidate else ""
+    def _get_preview_context(
+        self,
+        request: HttpRequest,
+        publication: Publication,
+        candidate: Revision | None,
+        can_view_documents: bool,
+    ) -> dict[str, object]:
+        """Build revision content, comparison, and the publication confirmation form."""
+        published = publication.revision
+        content, file_error = _read_revision_content(candidate)
         is_published = candidate is not None and candidate.pk == publication.revision_id
         diff = None
+        diff_error = None
         line_endings_only = False
-        if candidate and not is_published:
-            previous_content = published.read_content() if published else ""
-            diff = mark_safe(
-                HtmlDiff(tabsize=4, wrapcolumn=100).make_table(
-                    previous_content.splitlines(),
-                    content.splitlines(),
-                    fromdesc=escape(
-                        f"{published.document}: {published}"
-                        if published
-                        else _("No published revision")
-                    ),
-                    todesc=escape(f"{candidate.document}: {candidate}"),
-                    context=True,
-                    numlines=3,
+        if candidate and not is_published and not file_error:
+            previous_content, previous_error = _read_revision_content(published)
+            if previous_error:
+                diff_error = _(
+                    "The published revision file is corrupted or missing. "
+                    "Comparison is unavailable."
                 )
-            )
-            line_endings_only = (
-                previous_content != content
-                and previous_content.splitlines() == content.splitlines()
-            )
+            else:
+                diff = mark_safe(
+                    HtmlDiff(tabsize=4, wrapcolumn=100)
+                    .make_table(
+                        previous_content.splitlines(),
+                        content.splitlines(),
+                        fromdesc=escape(
+                            f"{published.document}: {published}"
+                            if published
+                            else _("No published revision")
+                        ),
+                        todesc=escape(f"{candidate.document}: {candidate}"),
+                        context=True,
+                        numlines=3,
+                    )
+                    .replace(
+                        "<td>&nbsp;No Differences Found&nbsp;</td>",
+                        format_html(
+                            "<td>&nbsp;{}&nbsp;</td>", _("No differences found")
+                        ),
+                    )
+                )
+                line_endings_only = (
+                    previous_content != content
+                    and previous_content.splitlines() == content.splitlines()
+                )
 
         publish_form = None
-        if candidate and (
-            self.has_add_permission(request)
-            if publication.pk is None
-            else self.has_change_permission(request, obj=publication)
+        if (
+            candidate
+            and not file_error
+            and can_view_documents
+            and (
+                self.has_add_permission(request)
+                if publication.pk is None
+                else self.has_change_permission(request, obj=publication)
+            )
         ):
             publish_form = PublishForm(
                 auto_id="publication_%s",
@@ -434,38 +438,100 @@ class PublicationAdmin(admin.ModelAdmin):
                     "expected_revision_id": publication.revision_id,
                 },
             )
-
-        context = {
-            "publication": publication,
-            "published": published,
-            "candidate": candidate,
+        return {
             "is_published": is_published,
             "content": content,
+            "file_error": file_error,
             "diff": diff,
+            "diff_error": diff_error,
             "line_endings_only": line_endings_only,
-            "document_form": document_form,
-            "revision_form": revision_form,
-            "selected_document": selected_document,
-            "can_edit_document": request.user.has_perm("llms_manager.change_document"),
             "publish_form": publish_form,
+        }
+
+    def _redirect_to_review(
+        self, request: HttpRequest, object_id: str | None
+    ) -> HttpResponseRedirect:
+        """Redirect to revision review with the submitted address and selection."""
+        change_url = reverse(
+            f"{self.admin_site.name}:llms_manager_publication_"
+            f"{'add' if object_id is None else 'change'}",
+            kwargs={} if object_id is None else {"object_id": object_id},
+        )
+        query = {
+            field: request.POST[field]
+            for field in ("directory", "filename", "document", "revision")
+            if field in request.POST
+        }
+        query["show_diff"] = "1"
+        return HttpResponseRedirect(f"{change_url}?{urlencode(query)}")
+
+    @method_decorator(csrf_protect)
+    def changeform_view(
+        self,
+        request: HttpRequest,
+        object_id: str | None = None,
+        form_url: str = "",
+        extra_context: dict[str, object] | None = None,
+    ) -> HttpResponse:
+        if request.method not in ("GET", "POST"):
+            return super().changeform_view(request, object_id, form_url, extra_context)
+
+        can_view_documents = self._can_view_documents(request)
+        if request.method == "POST" and not can_view_documents:
+            raise PermissionDenied
+
+        if object_id is None:
+            if not self.has_add_permission(request):
+                raise PermissionDenied
+            publication = Publication()
+        else:
+            publication = self.get_object(request, object_id)
+            if publication is None:
+                raise Http404
+            if not self.has_view_or_change_permission(request, obj=publication):
+                raise PermissionDenied
+
+        if request.method == "POST" and (
+            "select_document" in request.POST or "show_diff" in request.POST
+        ):
+            query = {
+                key: request.POST[key]
+                for key in (
+                    "directory",
+                    "filename",
+                    "document",
+                    "revision",
+                    "_popup",
+                    "_to_field",
+                )
+                if key in request.POST
+            }
+            page_action = (
+                "show_diff" if "show_diff" in request.POST else "select_document"
+            )
+            query[page_action] = "1"
+            return HttpResponseRedirect(f"{request.path}?{urlencode(query=query)}")
+
+        selecting, selection_context = self._get_selection_context(
+            request, publication, can_view_documents
+        )
+        preview_context = self._get_preview_context(
+            request, publication, selection_context["candidate"], can_view_documents
+        )
+        context = {
+            "publication": publication,
+            "published": publication.revision,
+            **selection_context,
+            **preview_context,
+            "can_edit_document": request.user.has_perm("llms_manager.change_document"),
             **(extra_context or {}),
         }
         try:
             response = super().changeform_view(request, object_id, form_url, context)
-        except PublicationConflict as error:
+        except (PublicationConflict, RevisionFileError) as error:
             self.message_user(request, str(error), messages.ERROR)
-            change_url = reverse(
-                f"{self.admin_site.name}:llms_manager_publication_"
-                f"{'add' if object_id is None else 'change'}",
-                kwargs={} if object_id is None else {"object_id": object_id},
-            )
-            query = {
-                field: request.POST[field]
-                for field in ("directory", "filename", "document", "revision")
-                if field in request.POST
-            }
-            query["show_diff"] = "1"
-            return HttpResponseRedirect(f"{change_url}?{urlencode(query)}")
+            return self._redirect_to_review(request, object_id)
+
         if (
             request.method == "GET"
             and selecting
@@ -478,7 +544,7 @@ class PublicationAdmin(admin.ModelAdmin):
                     if field in request.GET
                 }
             )
-        if (
+        elif (
             request.method == "POST"
             and response.status_code == 302
             and "_continue" in request.POST
@@ -499,14 +565,3 @@ class PublicationAdmin(admin.ModelAdmin):
                 url._replace(query=urlencode(query=parameters))
             )
         return response
-
-    @method_decorator(require_POST)
-    def publish_view(self, request: HttpRequest, publication_id: int) -> HttpResponse:
-        return self.changeform_view(
-            request,
-            object_id=str(publication_id),
-            form_url=reverse(
-                f"{self.admin_site.name}:llms_manager_publication_change",
-                kwargs={"object_id": publication_id},
-            ),
-        )

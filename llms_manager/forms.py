@@ -3,6 +3,7 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from llms_manager.exceptions import RevisionFileError
 from llms_manager.models import Document, Publication, Revision
 
 
@@ -99,7 +100,13 @@ class PublicationForm(forms.ModelForm):
         ):
             raise forms.ValidationError(_("Review the revision before publishing."))
 
-        cleaned_data["publish_revision"] = revision_form.cleaned_data["revision"]
+        revision = revision_form.cleaned_data["revision"]
+        try:
+            revision.read_content()
+        except RevisionFileError as error:
+            raise forms.ValidationError(str(error)) from error
+
+        cleaned_data["publish_revision"] = revision
         cleaned_data["expected_revision_id"] = publish_form.cleaned_data[
             "expected_revision_id"
         ]

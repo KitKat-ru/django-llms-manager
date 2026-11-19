@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -53,6 +53,91 @@ class TestDocumentAdmin:
     def media_root(self, settings: Settings, tmp_path: Path) -> Path:
         settings.MEDIA_ROOT = tmp_path
         return tmp_path
+
+    @pytest.fixture(params=["missing", "invalid_utf8"])
+    def damage_file(self, request: pytest.FixtureRequest) -> Callable[[Revision], None]:
+        def damage(revision: Revision) -> None:
+            if request.param == "missing":
+                revision.file.storage.delete(revision.file.name)
+            else:
+                Path(revision.file.path).write_bytes(b"\xff\xfe")
+
+        return damage
+
+    @pytest.mark.parametrize("action", ["editor", "edit_revision", "revision"])
+    def test_unreadable_revision_does_not_prevent_opening_admin_pages(
+        self,
+        document: Document,
+        editor: AbstractUser,
+        editor_client: Client,
+        damage_file: Callable[[Revision], None],
+        action: str,
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Content\n", editor)
+        damage_file(revision)
+        kwargs = {"document_id": document.pk}
+        if action != "editor":
+            kwargs["revision_id"] = revision.pk
+
+        response = editor_client.get(
+            reverse(f"admin:llms_manager_document_{action}", kwargs=kwargs)
+        )
+
+        assert response.status_code == 200
+        assert b"The revision file is corrupted or missing." in response.content
+        assert b"# Content" not in response.content
+        if action != "revision":
+            assert response.context["editor_form"]["content"].value() == ""
+        assert Revision.objects.count() == 1
+        assert not Publication.objects.exists()
+
+    @pytest.mark.parametrize("method", ["get", "head"])
+    def test_unreadable_revision_preview_returns_400(
+        self,
+        document: Document,
+        editor: AbstractUser,
+        editor_client: Client,
+        damage_file: Callable[[Revision], None],
+        method: str,
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Content\n", editor)
+        damage_file(revision)
+
+        response = getattr(editor_client, method)(
+            reverse(
+                "admin:llms_manager_document_preview",
+                kwargs={"document_id": document.pk, "revision_id": revision.pk},
+            )
+        )
+
+        assert response.status_code == 400
+        assert response["Content-Type"] == "text/plain; charset=utf-8"
+        assert response.content == (
+            b"The revision file is corrupted or missing." if method == "get" else b""
+        )
+
+    def test_editor_can_save_a_new_revision_when_its_source_file_is_unreadable(
+        self,
+        document: Document,
+        editor: AbstractUser,
+        editor_client: Client,
+        damage_file: Callable[[Revision], None],
+    ) -> None:
+        source = Revision.create_from_content(document, "# Source\n", editor)
+        damage_file(source)
+
+        response = editor_client.post(
+            reverse(
+                "admin:llms_manager_document_edit_revision",
+                kwargs={"document_id": document.pk, "revision_id": source.pk},
+            ),
+            {"save_revision": "1", "content": "# Replacement\n"},
+        )
+
+        assert response.status_code == 302
+        assert Revision.objects.count() == 2
+        assert document.revisions.first().read_content() == "# Replacement\n"
+        assert not Publication.objects.exists()
 
     def test_upload_field_does_not_block_saving_typed_content(
         self, editor_client: Client, editor_url: str

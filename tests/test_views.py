@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
@@ -53,6 +53,107 @@ class TestLlmsView:
         cache.clear()
         yield
         cache.clear()
+
+    @pytest.fixture(params=["missing", "invalid_utf8"])
+    def damage_file(self, request: pytest.FixtureRequest) -> Callable[[Revision], None]:
+        def damage(revision: Revision) -> None:
+            if request.param == "missing":
+                revision.file.storage.delete(revision.file.name)
+            else:
+                Path(revision.file.path).write_bytes(b"\xff\xfe")
+
+        return damage
+
+    @pytest.mark.parametrize("timeout", [0, 60])
+    @pytest.mark.parametrize("method", ["get", "head"])
+    def test_unreadable_published_file_returns_400_without_caching_the_error(
+        self,
+        document: Document,
+        publication: Publication,
+        client: Client,
+        settings: Settings,
+        damage_file: Callable[[Revision], None],
+        timeout: int,
+        method: str,
+    ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = timeout
+        revision = Revision.create_from_content(document, "# Published\n", None)
+        publication.publish(revision=revision, expected_revision_id=None)
+        damage_file(revision)
+        url = publication.get_absolute_url()
+
+        failed = getattr(client, method)(url)
+        Path(revision.file.path).write_bytes(b"# Restored\n")
+        restored = client.get(url)
+
+        assert failed.status_code == 400
+        assert failed["Content-Type"] == "text/plain; charset=utf-8"
+        assert failed.content == (
+            b"The revision file is corrupted or missing." if method == "get" else b""
+        )
+        assert restored.status_code == 200
+        assert restored.content == b"# Restored\n"
+        publication.refresh_from_db()
+        assert publication.revision_id == revision.pk
+        assert Publication.objects.count() == 1
+        assert Revision.objects.count() == 1
+
+    def test_cached_text_remains_available_until_expiry_after_file_damage(
+        self,
+        document: Document,
+        publication: Publication,
+        client: Client,
+        settings: Settings,
+        damage_file: Callable[[Revision], None],
+    ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
+        revision = Revision.create_from_content(document, "# Cached\n", None)
+        publication.publish(revision=revision, expected_revision_id=None)
+        url = publication.get_absolute_url()
+        storage = revision.file.storage
+
+        with (
+            patch(
+                "django.core.cache.backends.locmem.time.time", return_value=1000
+            ) as clock,
+            patch.object(storage, "open", wraps=storage.open) as open_file,
+        ):
+            first = client.get(url)
+            damage_file(revision)
+            clock.return_value = 1004
+            cached = client.get(url)
+            head = client.head(url)
+            assert open_file.call_count == 1
+
+            clock.return_value = 1005
+            expired = client.get(url)
+
+        assert first.status_code == 200
+        assert cached.status_code == 200
+        assert cached.content == first.content == b"# Cached\n"
+        assert head.status_code == 200
+        assert head.content == b""
+        assert expired.status_code == 400
+        assert open_file.call_count == 2
+
+    @pytest.mark.parametrize("timeout", [0, 60])
+    def test_published_revision_without_a_file_name_returns_400(
+        self,
+        document: Document,
+        publication: Publication,
+        client: Client,
+        settings: Settings,
+        timeout: int,
+    ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = timeout
+        revision = Revision.create_from_content(document, "# Published\n", None)
+        publication.publish(revision=revision, expected_revision_id=None)
+        Revision.objects.filter(pk=revision.pk).update(file="")
+
+        response = client.get(publication.get_absolute_url())
+
+        assert response.status_code == 400
+        assert response.content == b"The revision file is corrupted or missing."
 
     def test_unknown_publication_is_not_created(self, client: Client) -> None:
         response = client.get("/llms.txt")

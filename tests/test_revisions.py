@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import Client
 
-from llms_manager.exceptions import PublicationConflict
+from llms_manager.exceptions import PublicationConflict, RevisionFileError
 from llms_manager.models import Document, Publication, Revision
 
 if TYPE_CHECKING:
@@ -181,19 +181,50 @@ class TestRevisions:
         assert first.file.name == first_file
         assert first.read_content() == "# First\n"
 
-    def test_missing_candidate_file_keeps_published_revision(
-        self, document: Document, publication: Publication, author: AbstractUser
+    @pytest.mark.parametrize("missing", [False, True])
+    def test_unreadable_candidate_file_keeps_published_revision(
+        self,
+        document: Document,
+        publication: Publication,
+        author: AbstractUser,
+        missing: bool,
     ) -> None:
         published = Revision.create_from_content(document, "# Published\n", author)
         candidate = Revision.create_from_content(document, "# Candidate\n", author)
         publication.publish(revision=published, expected_revision_id=None)
-        candidate.file.storage.delete(candidate.file.name)
+        assert candidate.read_content() == "# Candidate\n"
+        if missing:
+            candidate.file.storage.delete(candidate.file.name)
+        else:
+            Path(candidate.file.path).write_bytes(b"\xff\xfe")
 
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(RevisionFileError):
             publication.publish(revision=candidate, expected_revision_id=published.pk)
 
         publication.refresh_from_db()
         assert publication.revision_id == published.pk
+
+    def test_revision_without_a_file_name_cannot_be_read(
+        self, document: Document, author: AbstractUser
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Content\n", author)
+        Revision.objects.filter(pk=revision.pk).update(file="")
+        revision.refresh_from_db()
+
+        with pytest.raises(RevisionFileError):
+            revision.read_content()
+
+    def test_unexpected_storage_error_is_not_reported_as_a_damaged_file(
+        self, document: Document, author: AbstractUser
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Content\n", author)
+        storage = revision.file.storage
+
+        with (
+            patch.object(storage, "open", side_effect=OSError("Storage unavailable")),
+            pytest.raises(OSError, match="Storage unavailable"),
+        ):
+            revision.read_content()
 
     def test_deleting_author_preserves_revision(
         self, document: Document, author: AbstractUser

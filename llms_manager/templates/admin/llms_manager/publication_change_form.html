@@ -4,23 +4,13 @@
 {% block content %}
   {% if has_change_permission or add %}
     <div class="submit-row llms-publication-actions">
-      <input type="submit" form="{{ opts.model_name }}_form" name="_continue" value="{% translate 'Save address' %}">
-      <input type="submit" form="llms-publication-publish-form" value="{% translate 'Publish revision' %}" class="default"{% if not publish_form %} disabled{% endif %}>
+      <input type="submit" form="{{ opts.model_name }}_form" name="_publish" value="{% translate 'Save and publish' %}" class="default"{% if not publish_form %} disabled{% endif %}>
     </div>
-    {% if publish_form %}
+    {% if publish_form and not is_published %}
       <p>{% blocktranslate with document=candidate.document revision=candidate %}Ready to publish: {{ document }}, {{ revision }}.{% endblocktranslate %}</p>
-    {% elif address_pending and candidate %}
-      <p class="help">{% translate "Save the address to publish the selected revision." %}</p>
     {% elif not is_published %}
-      <p class="help">{% translate "Select a document and review a revision. Save the address before publishing." %}</p>
+      <p class="help">{% translate "Select a document and review a revision before publishing." %}</p>
     {% endif %}
-  {% endif %}
-
-  {% if publish_form %}
-    <form method="post" id="llms-publication-publish-form" action="{% url opts|admin_urlname:'publish' publication_id=publication.pk %}">
-      {% csrf_token %}
-      {{ publish_form.as_p }}
-    </form>
   {% endif %}
 
   {{ block.super }}
@@ -59,6 +49,10 @@
 
 {% block after_field_sets %}
   {{ block.super }}
+  <input type="hidden" name="_continue" value="1">
+  {% if publish_form %}
+    {{ publish_form.as_p }}
+  {% endif %}
   {% if document_form %}
     <div class="module">
       <h2>{% translate "Revision selection" %}</h2>

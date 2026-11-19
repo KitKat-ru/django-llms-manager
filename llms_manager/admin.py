@@ -3,9 +3,9 @@ from typing import ClassVar
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.contrib import admin, messages
+from django.contrib.admin.templatetags.admin_urls import add_preserved_filters
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db import transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -27,6 +27,7 @@ from llms_manager.exceptions import PublicationConflict
 from llms_manager.forms import (
     DocumentSelectionForm,
     EditorForm,
+    PublicationForm,
     PublishForm,
     RevisionSelectionForm,
     UploadForm,
@@ -236,6 +237,7 @@ class PublicationAdmin(admin.ModelAdmin):
     list_display = ("__str__", "current_document", "revision")
     fields = ("directory", "filename", "current_document", "revision")
     readonly_fields = ("current_document", "revision")
+    form = PublicationForm
     change_form_template = "admin/llms_manager/publication_change_form.html"
 
     class Media:
@@ -257,6 +259,36 @@ class PublicationAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj: Publication, form, change: bool) -> None:
         obj.save(update_fields=("directory", "filename") if change else None)
+        obj.publish(
+            revision=form.cleaned_data["publish_revision"],
+            expected_revision_id=form.cleaned_data["expected_revision_id"],
+        )
+
+    def construct_change_message(self, request, form, formsets, add=False):
+        revision = form.cleaned_data["publish_revision"]
+        return _("Published %(document)s, revision %(number)s.") % {
+            "document": revision.document,
+            "number": revision.number,
+        }
+
+    def response_change(self, request, obj):
+        if "_popup" in request.POST:
+            return super().response_change(request, obj)
+
+        change_url = reverse(
+            f"{self.admin_site.name}:llms_manager_publication_change",
+            kwargs={"object_id": obj.pk},
+        )
+        self.message_user(request, _("Revision published."), messages.SUCCESS)
+        return HttpResponseRedirect(
+            add_preserved_filters(
+                {
+                    "preserved_filters": self.get_preserved_filters(request),
+                    "opts": self.opts,
+                },
+                change_url,
+            )
+        )
 
     def get_urls(self) -> list[URLPattern]:
         return [
@@ -292,11 +324,11 @@ class PublicationAdmin(admin.ModelAdmin):
                 raise PermissionDenied
 
         can_view_documents = self._can_view_documents(request)
+        if request.method == "POST" and not can_view_documents:
+            raise PermissionDenied
         if request.method == "POST" and any(
             key in request.POST for key in ("select_document", "show_diff")
         ):
-            if not can_view_documents:
-                raise PermissionDenied
             query = {
                 key: request.POST[key]
                 for key in (
@@ -334,11 +366,6 @@ class PublicationAdmin(admin.ModelAdmin):
         )
         show_diff = "show_diff" in selection_data or (
             request.method == "POST" and bool(selection_data.get("revision"))
-        )
-        address_pending = publication.pk is None or any(
-            field in selection_data
-            and selection_data[field] != getattr(publication, field)
-            for field in ("directory", "filename")
         )
         if selecting and not can_view_documents:
             raise PermissionDenied
@@ -395,16 +422,15 @@ class PublicationAdmin(admin.ModelAdmin):
             )
 
         publish_form = None
-        if (
-            candidate
-            and not is_published
-            and not address_pending
-            and self.has_change_permission(request, obj=publication)
+        if candidate and (
+            self.has_add_permission(request)
+            if publication.pk is None
+            else self.has_change_permission(request, obj=publication)
         ):
             publish_form = PublishForm(
                 auto_id="publication_%s",
                 initial={
-                    "revision": candidate,
+                    "reviewed_revision": candidate,
                     "expected_revision_id": publication.revision_id,
                 },
             )
@@ -422,10 +448,24 @@ class PublicationAdmin(admin.ModelAdmin):
             "selected_document": selected_document,
             "can_edit_document": request.user.has_perm("llms_manager.change_document"),
             "publish_form": publish_form,
-            "address_pending": address_pending,
             **(extra_context or {}),
         }
-        response = super().changeform_view(request, object_id, form_url, context)
+        try:
+            response = super().changeform_view(request, object_id, form_url, context)
+        except PublicationConflict as error:
+            self.message_user(request, str(error), messages.ERROR)
+            change_url = reverse(
+                f"{self.admin_site.name}:llms_manager_publication_"
+                f"{'add' if object_id is None else 'change'}",
+                kwargs={} if object_id is None else {"object_id": object_id},
+            )
+            query = {
+                field: request.POST[field]
+                for field in ("directory", "filename", "document", "revision")
+                if field in request.POST
+            }
+            query["show_diff"] = "1"
+            return HttpResponseRedirect(f"{change_url}?{urlencode(query)}")
         if (
             request.method == "GET"
             and selecting
@@ -455,59 +495,18 @@ class PublicationAdmin(admin.ModelAdmin):
                 "show_diff",
             ):
                 parameters.pop(field, None)
-            if selecting and selected_document is not None:
-                parameters["document"] = str(selected_document.pk)
-                if candidate:
-                    parameters.update({"revision": str(candidate.pk), "show_diff": "1"})
             response["Location"] = urlunsplit(
                 url._replace(query=urlencode(query=parameters))
             )
         return response
 
     @method_decorator(require_POST)
-    def publish_view(
-        self, request: HttpRequest, publication_id: int
-    ) -> HttpResponseRedirect:
-        publication = get_object_or_404(self.get_queryset(request), pk=publication_id)
-        if not self.has_change_permission(
-            request, obj=publication
-        ) or not self._can_view_documents(request):
-            raise PermissionDenied
-
-        change_url = reverse(
-            f"{self.admin_site.name}:llms_manager_publication_change",
-            kwargs={"object_id": publication_id},
+    def publish_view(self, request: HttpRequest, publication_id: int) -> HttpResponse:
+        return self.changeform_view(
+            request,
+            object_id=str(publication_id),
+            form_url=reverse(
+                f"{self.admin_site.name}:llms_manager_publication_change",
+                kwargs={"object_id": publication_id},
+            ),
         )
-        form = PublishForm(data=request.POST)
-        if not form.is_valid():
-            self.message_user(
-                request, _("Review the revision before publishing."), messages.ERROR
-            )
-            return HttpResponseRedirect(change_url)
-
-        revision = form.cleaned_data["revision"]
-        try:
-            with transaction.atomic():
-                publication.publish(
-                    revision=revision,
-                    expected_revision_id=form.cleaned_data["expected_revision_id"],
-                )
-                self.log_change(
-                    request,
-                    publication,
-                    _("Published %(document)s, revision %(number)s.")
-                    % {"document": revision.document, "number": revision.number},
-                )
-        except PublicationConflict as error:
-            self.message_user(request, str(error), messages.ERROR)
-            query = urlencode(
-                query={
-                    "document": revision.document_id,
-                    "revision": revision.pk,
-                    "show_diff": "1",
-                }
-            )
-            return HttpResponseRedirect(f"{change_url}?{query}")
-
-        self.message_user(request, _("Revision published."))
-        return HttpResponseRedirect(change_url)

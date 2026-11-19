@@ -3,7 +3,7 @@ from typing import Any
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from llms_manager.models import Document, Revision
+from llms_manager.models import Document, Publication, Revision
 
 
 class EditorForm(forms.Form):
@@ -37,9 +37,9 @@ class UploadForm(forms.Form):
 
 
 class PublishForm(forms.Form):
-    """Validate a selected revision and the expected publication baseline."""
+    """Validate the reviewed revision and the expected publication baseline."""
 
-    revision = forms.ModelChoiceField(
+    reviewed_revision = forms.ModelChoiceField(
         queryset=Revision.objects.select_related("document"),
         widget=forms.HiddenInput,
     )
@@ -71,3 +71,36 @@ class RevisionSelectionForm(forms.Form):
     def __init__(self, *args: Any, document: Document, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["revision"].queryset = document.revisions.all()
+
+
+class PublicationForm(forms.ModelForm):
+    """Validate the publication address and the selected revision."""
+
+    class Meta:
+        """Define editable publication fields."""
+
+        model = Publication
+        fields = ("directory", "filename")
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        document_form = DocumentSelectionForm(self.data)
+        publish_form = PublishForm(self.data)
+        if not document_form.is_valid() or not publish_form.is_valid():
+            raise forms.ValidationError(_("Review the revision before publishing."))
+
+        revision_form = RevisionSelectionForm(
+            self.data, document=document_form.cleaned_data["document"]
+        )
+        if (
+            not revision_form.is_valid()
+            or revision_form.cleaned_data["revision"]
+            != publish_form.cleaned_data["reviewed_revision"]
+        ):
+            raise forms.ValidationError(_("Review the revision before publishing."))
+
+        cleaned_data["publish_revision"] = revision_form.cleaned_data["revision"]
+        cleaned_data["expected_revision_id"] = publish_form.cleaned_data[
+            "expected_revision_id"
+        ]
+        return cleaned_data

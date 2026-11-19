@@ -16,9 +16,8 @@ publish a selected version at the site root or in a nested directory.
 Requires Python 3.10+ and Django 4.2+. Supported Python/Django combinations follow
 [Django's compatibility table](https://docs.djangoproject.com/en/stable/faq/install/#what-python-version-can-i-use-with-django).
 
-CI is configured to check all 22 officially supported combinations of the declared
-Python and Django series, using the latest available patch release of each Django
-series:
+CI checks the following 22 Python/Django combinations, using the latest available
+patch release of each Django series:
 
 | Python | Django series |
 | --- | --- |
@@ -76,10 +75,11 @@ addresses and select the revisions served there.
 2. Create or open a publication in **Publications** and set the directory and
    file name (`llms.txt` or `llms-full.txt`).
 3. Select a document, click **Show revisions**, choose a revision, and click
-   **Review revision**.
+   **Preview revision**.
 4. Click **Save and publish** to save the address and selected revision together.
 
-Saving a publication requires a reviewed revision and publishes it immediately.
+Saving a publication in the admin requires a previewed revision and publishes it
+immediately.
 
 | Directory | File name | Public address |
 | --- | --- | --- |
@@ -91,11 +91,15 @@ Both file names are managed independently; `llms-full.txt` is not assembled
 automatically.
 
 Revisions are immutable. To restore earlier content, review and publish an older
-revision. If another editor publishes first, review the updated diff before retrying.
+revision. If the published revision changes, review the updated diff before retrying.
 
-Published content is publicly available as UTF-8 plain text. The admin uses Django's
-model permissions; selecting and publishing revisions also requires `view_document`
-or `change_document`. Documents and revisions cannot be deleted through the admin.
+Public files require no login and are served as UTF-8 plain text via `GET` and
+`HEAD`. Unknown addresses return `404`; existing publications without a selected
+revision return an empty `200` response.
+
+The admin uses Django's model permissions. Selecting or publishing a revision also
+requires `view_document` or `change_document`. Documents and revisions cannot be
+deleted through the admin.
 
 ## File storage
 
@@ -113,6 +117,10 @@ The database stores revision metadata and file keys such as
 `llms_manager/<uuid>.txt`. Back up both the database and revision files. When moving
 to another storage backend, preserve the stored file keys.
 
+If a revision file is missing or is not valid UTF-8, the admin remains accessible
+but cannot publish that revision. Its public URL returns `400` when reading the
+file fails.
+
 ## Caching
 
 Revision text uses Django's default cache. Configure the lifetime in seconds
@@ -126,6 +134,8 @@ Use a non-negative integer or `None`. Both `0` and `None` disable caching.
 
 Each request resolves the current publication, so a newly published revision is
 served on the next request. Admin previews read directly from storage.
+Cached text remains available until its TTL expires if the storage file is lost
+or damaged.
 
 ## Development
 
@@ -169,7 +179,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run python -m django check --settings=tests.settings
 uv run python -m django makemigrations llms_manager --check --dry-run --settings=tests.settings
-uv run pytest
+uv run pytest --migrations
 ```
 
 After model changes, generate and review migrations with
@@ -201,7 +211,7 @@ With GNU gettext installed, update the catalogs:
 
 ```bash
 cd llms_manager
-uv run python -m django makemessages -l en -l ru
+uv run python -m django makemessages -l en -l ru --no-wrap --no-obsolete
 ```
 
 Edit `msgstr` values in `locale/*/LC_MESSAGES/django.po`, then compile:

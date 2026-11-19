@@ -20,6 +20,10 @@
     </ul>
   {% endif %}
 
-  <h2>{% translate "Complete content" %}</h2>
-  <pre class="llms-content">{{ content }}</pre>
+  <h2>{% translate "Full text" %}</h2>
+  {% if file_error %}
+    <p class="errornote">{{ file_error }}</p>
+  {% else %}
+    <pre class="llms-content">{{ content }}</pre>
+  {% endif %}
 {% endblock %}

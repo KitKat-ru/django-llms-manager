@@ -7,6 +7,10 @@
     <li><a href="{% url opts|admin_urlname:'history' object_id=document.pk %}">{% translate "Document history" %}</a></li>
   </ul>
 
+  {% if file_error %}
+    <p class="errornote">{{ file_error }}</p>
+  {% endif %}
+
   {% if has_change_permission %}
     <form method="post" enctype="multipart/form-data" class="llms-editor">
       {% csrf_token %}

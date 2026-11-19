@@ -22,19 +22,25 @@
         {% if is_published %}
           <p>{% translate "This revision is currently published." %}</p>
           <p><a href="{{ publication.get_absolute_url }}">{{ publication }}</a></p>
-        {% else %}
+        {% elif not file_error %}
           <h2>{% translate "Changes compared with the published revision" %}</h2>
-          {% if line_endings_only %}
-            <p>{% translate "Only line endings or the final newline differ." %}</p>
+          {% if diff_error %}
+            <p class="errornote">{{ diff_error }}</p>
+          {% elif line_endings_only %}
+            <p>{% translate "The text is unchanged. Only line breaks differ." %}</p>
           {% else %}
             <div class="llms-diff">{{ diff }}</div>
           {% endif %}
         {% endif %}
 
-        <details{% if is_published %} open{% endif %}>
-          <summary>{% translate "Complete content" %}</summary>
-          <pre class="llms-content">{{ content }}</pre>
-        </details>
+        {% if file_error %}
+          <p class="errornote">{{ file_error }}</p>
+        {% else %}
+          <details{% if is_published %} open{% endif %}>
+            <summary>{% translate "Full text" %}</summary>
+            <pre class="llms-content">{{ content }}</pre>
+          </details>
+        {% endif %}
 
         {% if can_edit_document %}
           <p><a href="{% url 'admin:llms_manager_document_edit_revision' document_id=candidate.document_id revision_id=candidate.pk %}">{% translate "Edit as new revision" %}</a></p>
@@ -60,7 +66,7 @@
       <button type="submit" name="select_document" value="1">{% translate "Show revisions" %}</button>
       {% if revision_form %}
         {{ revision_form.as_p }}
-        <button type="submit" name="show_diff" value="1">{% translate "Review revision" %}</button>
+        <button type="submit" name="show_diff" value="1">{% translate "Preview revision" %}</button>
       {% endif %}
       {% if selected_document %}
         <p><a href="{% url 'admin:llms_manager_document_revisions' document_id=selected_document.pk %}">{% translate "Revision history" %}</a></p>

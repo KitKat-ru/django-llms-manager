@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: django-llms-manager\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-16 17:26+0300\n"
+"POT-Creation-Date: 2026-11-20 01:20+0300\n"
 "PO-Revision-Date: 2026-11-16 00:55+0300\n"
 "Last-Translator: django-llms-manager contributors\n"
 "Language-Team: Russian\n"
@@ -14,155 +14,163 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
-"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
-"(n%100>=11 && n%100<=14)? 2 : 3);\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
 
-#: admin.py:42 admin.py:47
+#: admin.py:57 admin.py:62
 #: templates/admin/llms_manager/document_change_form.html:5
 #: templates/admin/llms_manager/history.html:6
 msgid "Editor"
 msgstr "Редактор"
 
-#: admin.py:147
+#: admin.py:163
 msgid "File loaded into the editor. Save it to create a revision."
 msgstr "Файл загружен в редактор. Сохраните его, чтобы создать версию."
 
-#: admin.py:154
+#: admin.py:170
 msgid "Revision saved. Review it before publishing."
 msgstr "Версия сохранена. Просмотрите её перед публикацией."
 
-#: admin.py:174
+#: admin.py:189
 #, python-format
 msgid "Edit %(document)s"
 msgstr "Редактирование %(document)s"
 
-#: admin.py:195 templates/admin/llms_manager/document_change_form.html:6
+#: admin.py:211 templates/admin/llms_manager/document_change_form.html:6
 #: templates/admin/llms_manager/editor.html:6
 #: templates/admin/llms_manager/publication_change_form.html:72
 #: templates/admin/llms_manager/revision.html:6
 msgid "Revision history"
 msgstr "История версий"
 
-#: admin.py:252 forms.py:59
+#: admin.py:277 forms.py:60
 msgid "Document"
 msgstr "Документ"
 
-#: admin.py:381
-msgid "No published revision"
-msgstr "Нет опубликованной версии"
-
-#: admin.py:481
-msgid "Review the revision before publishing."
-msgstr "Просмотрите версию перед публикацией."
-
-#: admin.py:495
+#: admin.py:290
 #, python-format
 msgid "Published %(document)s, revision %(number)s."
 msgstr "Опубликован документ %(document)s, версия %(number)s."
 
-#: admin.py:286
+#: admin.py:303
 msgid "Revision published."
 msgstr "Версия опубликована."
 
-#: forms.py:13
+#: admin.py:395
+msgid "The published revision file is corrupted or missing. Comparison is unavailable."
+msgstr "Файл опубликованной версии повреждён или отсутствует. Сравнение недоступно."
+
+#: admin.py:406
+msgid "No published revision"
+msgstr "Нет опубликованной версии"
+
+#: admin.py:414
+msgid "No differences found"
+msgstr "Различий нет"
+
+#: forms.py:14
 msgid "Content"
 msgstr "Содержимое"
 
-#: forms.py:17
+#: forms.py:18
 msgid "The complete document in Markdown."
 msgstr "Полный документ в формате Markdown."
 
-#: forms.py:26
+#: forms.py:27
 msgid "UTF-8 file"
 msgstr "Файл в кодировке UTF-8"
 
-#: forms.py:35
+#: forms.py:36
 msgid "Upload a UTF-8 text file."
 msgstr "Загрузите текстовый файл в кодировке UTF-8."
 
-#: forms.py:68 templates/admin/llms_manager/history.html:12
+#: forms.py:69 templates/admin/llms_manager/history.html:12
 msgid "Revision"
 msgstr "Версия"
+
+#: forms.py:91 forms.py:101
+msgid "Review the revision before publishing."
+msgstr "Просмотрите версию перед публикацией."
+
+#: models.py:29 models.py:58
+msgid "document"
+msgstr "документ"
 
 #: models.py:30
 msgid "documents"
 msgstr "документы"
 
-#: models.py:35
+#: models.py:32
 msgid "name"
 msgstr "название"
 
-#: models.py:48
+#: models.py:45
 msgid "revision"
 msgstr "версия"
 
-#: models.py:49
+#: models.py:46
 msgid "revisions"
 msgstr "версии"
 
-#: models.py:29 models.py:61
-msgid "document"
-msgstr "документ"
-
-#: models.py:63
+#: models.py:60
 msgid "number"
 msgstr "номер"
 
-#: models.py:67
+#: models.py:64
 msgid "file"
 msgstr "файл"
 
-#: models.py:69
+#: models.py:66
 msgid "created at"
 msgstr "дата создания"
 
-#: models.py:76
+#: models.py:73
 msgid "created by"
 msgstr "автор"
 
-#: models.py:80
+#: models.py:77
 #, python-format
 msgid "Revision %(number)s"
 msgstr "Версия %(number)s"
 
-#: models.py:105
+#: models.py:104
 msgid "Saved revisions cannot be edited. Create a new revision."
 msgstr "Сохранённые версии нельзя редактировать. Создайте новую версию."
 
-#: models.py:128
+#: models.py:126
+msgid "The revision file is corrupted or missing."
+msgstr "Файл версии повреждён или отсутствует."
+
+#: models.py:136
 msgid "publication"
 msgstr "публикация"
 
-#: models.py:129
+#: models.py:137
 msgid "publications"
 msgstr "публикации"
 
-#: models.py:147
+#: models.py:155
 msgid "directory"
 msgstr "каталог"
 
-#: models.py:153
+#: models.py:161
 msgid "file name"
 msgstr "имя файла"
 
-#: models.py:162
+#: models.py:170
 msgid "published revision"
 msgstr "опубликованная версия"
 
-#: models.py:178
+#: models.py:186
 msgid "Enter a directory path without dot segments or URL parameters."
 msgstr "Укажите каталог на сайте, например /courses/python/. Не используйте «.» и «..» как отдельные части пути и не добавляйте параметры после «?»."
 
-#: models.py:184
+#: models.py:192
 msgid "The directory path is too long."
 msgstr "Путь к каталогу слишком длинный."
 
-#: models.py:207
+#: models.py:219
 msgid "The published revision changed. Review the updated diff and try again."
-msgstr ""
-"Опубликованная версия изменилась. Просмотрите обновлённые различия и "
-"повторите попытку."
+msgstr "Опубликованная версия изменилась. Просмотрите обновлённые различия и повторите попытку."
 
 #: templates/admin/llms_manager/base.html:11
 msgid "Home"
@@ -172,11 +180,11 @@ msgstr "Начало"
 msgid "Document history"
 msgstr "История документа"
 
-#: templates/admin/llms_manager/editor.html:15
+#: templates/admin/llms_manager/editor.html:19
 msgid "Load file into editor"
 msgstr "Загрузить файл в редактор"
 
-#: templates/admin/llms_manager/editor.html:21
+#: templates/admin/llms_manager/editor.html:25
 msgid "Save revision"
 msgstr "Сохранить версию"
 
@@ -205,42 +213,42 @@ msgstr "Назад"
 msgid "Next"
 msgstr "Далее"
 
-#: templates/admin/llms_manager/publication_change_form.html:8
+#: templates/admin/llms_manager/publication_change_form.html:7
 msgid "Save and publish"
 msgstr "Сохранить и опубликовать"
 
-#: templates/admin/llms_manager/publication_change_form.html:11
+#: templates/admin/llms_manager/publication_change_form.html:10
 #, python-format
 msgid "Ready to publish: %(document)s, %(revision)s."
 msgstr "Готово к публикации: %(document)s, %(revision)s."
 
-#: templates/admin/llms_manager/publication_change_form.html:15
+#: templates/admin/llms_manager/publication_change_form.html:12
 msgid "Select a document and review a revision before publishing."
 msgstr "Выберите документ и просмотрите версию перед публикацией."
 
-#: templates/admin/llms_manager/publication_change_form.html:33
+#: templates/admin/llms_manager/publication_change_form.html:23
 msgid "This revision is currently published."
 msgstr "Эта версия сейчас опубликована."
 
-#: templates/admin/llms_manager/publication_change_form.html:36
+#: templates/admin/llms_manager/publication_change_form.html:26
 msgid "Changes compared with the published revision"
 msgstr "Изменения по сравнению с опубликованной версией"
 
-#: templates/admin/llms_manager/publication_change_form.html:38
-msgid "Only line endings or the final newline differ."
-msgstr "Отличаются только окончания строк или завершающий перевод строки."
+#: templates/admin/llms_manager/publication_change_form.html:30
+msgid "The text is unchanged. Only line breaks differ."
+msgstr "Текст совпадает. Отличаются только переносы строк."
 
-#: templates/admin/llms_manager/publication_change_form.html:45
+#: templates/admin/llms_manager/publication_change_form.html:40
 #: templates/admin/llms_manager/revision.html:23
-msgid "Complete content"
-msgstr "Полное содержимое"
+msgid "Full text"
+msgstr "Полный текст"
 
-#: templates/admin/llms_manager/publication_change_form.html:50
+#: templates/admin/llms_manager/publication_change_form.html:46
 #: templates/admin/llms_manager/revision.html:9
 msgid "Edit as new revision"
 msgstr "Редактировать как новую версию"
 
-#: templates/admin/llms_manager/publication_change_form.html:54
+#: templates/admin/llms_manager/publication_change_form.html:50
 msgid "No published revision. The public endpoint returns an empty file."
 msgstr "Опубликованной версии нет. По публичному адресу доступен пустой файл."
 
@@ -253,31 +261,9 @@ msgid "Show revisions"
 msgstr "Показать версии"
 
 #: templates/admin/llms_manager/publication_change_form.html:69
-msgid "Review revision"
-msgstr "Просмотреть версию"
+msgid "Preview revision"
+msgstr "Предпросмотр версии"
 
 #: templates/admin/llms_manager/revision.html:7
 msgid "Plain text preview"
 msgstr "Предпросмотр текста"
-
-#~ msgid "Edit llms.txt"
-#~ msgstr "Редактирование llms.txt"
-
-#~ msgid "llms.txt document"
-#~ msgstr "документ llms.txt"
-
-#~ msgid "Preview published revision"
-#~ msgstr "Просмотреть опубликованную версию"
-
-#, python-format
-#~ msgid "Published revision: %(number)s."
-#~ msgstr "Опубликованная версия: %(number)s."
-
-#~ msgid "Published"
-#~ msgstr "Опубликована"
-
-#~ msgid "Yes"
-#~ msgstr "Да"
-
-#~ msgid "Publish this revision"
-#~ msgstr "Опубликовать эту версию"

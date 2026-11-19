@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 from re import findall, search
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -76,25 +76,38 @@ class TestPublicationAdmin:
         }
 
     def _publish_data(
-        self, revision: Revision, expected_revision_id: int | None
+        self,
+        revision: Revision,
+        expected_revision_id: int | None,
+        *,
+        directory: str = "/",
+        filename: str = Publication.Filename.LLMS,
     ) -> dict[str, int | str]:
         return {
+            "directory": directory,
+            "filename": filename,
+            "document": revision.document_id,
             "revision": revision.pk,
+            "reviewed_revision": revision.pk,
             "expected_revision_id": (
                 expected_revision_id if expected_revision_id is not None else ""
             ),
+            "_publish": "1",
+            "_continue": "1",
         }
 
     def test_address_can_be_created_with_a_filename_choice(
-        self, editor_client: Client
+        self, document: Document, editor: AbstractUser, editor_client: Client
     ) -> None:
+        revision = Revision.create_from_content(document, "# Selected\n", editor)
         response = editor_client.post(
             reverse(viewname="admin:llms_manager_publication_add"),
-            {
-                "directory": "courses/python",
-                "filename": "llms-full.txt",
-                "_continue": "1",
-            },
+            self._publish_data(
+                revision=revision,
+                expected_revision_id=None,
+                directory="courses/python",
+                filename="llms-full.txt",
+            ),
         )
 
         publication = Publication.objects.get()
@@ -105,8 +118,32 @@ class TestPublicationAdmin:
         )
         assert publication.directory == "/courses/python/"
         assert publication.filename == "llms-full.txt"
-        assert publication.revision_id is None
+        assert publication.revision_id == revision.pk
         assert editor_client.get(response.url).status_code == 200
+        assert (
+            editor_client.get(publication.get_absolute_url()).content == b"# Selected\n"
+        )
+
+    @pytest.mark.parametrize("missing", ["document", "revision", "reviewed_revision"])
+    def test_new_publication_requires_a_reviewed_revision(
+        self,
+        document: Document,
+        editor: AbstractUser,
+        editor_client: Client,
+        missing: str,
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Selected\n", editor)
+        data = self._publish_data(revision=revision, expected_revision_id=None)
+        data.pop(missing)
+
+        response = editor_client.post(
+            reverse(viewname="admin:llms_manager_publication_add"), data
+        )
+
+        assert response.status_code == 200
+        assert response.context["adminform"].form.non_field_errors()
+        assert not Publication.objects.exists()
+        assert not LogEntry.objects.exists()
 
     def test_new_publication_shows_document_selection(
         self, document: Document, editor_client: Client
@@ -128,6 +165,8 @@ class TestPublicationAdmin:
             < html.index("</form>", form_start)
         )
         assert b'name="select_document"' in response.content
+        assert b'value="Save"' not in response.content
+        assert b'name="_publish"' in response.content
         assert not Publication.objects.exists()
 
     @pytest.mark.parametrize("existing", [False, True])
@@ -173,7 +212,7 @@ class TestPublicationAdmin:
         assert reviewing.context["candidate"].pk == revision.pk
         assert reviewing.context["content"] == "# Selected\n"
         assert reviewing.context["diff"]
-        assert reviewing.context["publish_form"] is None
+        assert reviewing.context["publish_form"] is not None
         form = reviewing.context["adminform"].form
         assert form["directory"].value() == "courses/python"
         assert form["filename"].value() == "llms-full.txt"
@@ -189,7 +228,7 @@ class TestPublicationAdmin:
             assert publication.revision_id is None
         assert not LogEntry.objects.exists()
 
-    def test_saving_a_new_address_preserves_selection_for_publication(
+    def test_new_publication_is_created_with_the_reviewed_revision(
         self, document: Document, editor: AbstractUser, editor_client: Client
     ) -> None:
         revision = Revision.create_from_content(document, "# Selected\n", editor)
@@ -207,7 +246,12 @@ class TestPublicationAdmin:
 
         response = editor_client.post(
             review.wsgi_request.get_full_path(),
-            {**selection, "_continue": "1"},
+            self._publish_data(
+                revision=revision,
+                expected_revision_id=None,
+                directory="courses/python",
+                filename="llms-full.txt",
+            ),
             follow=True,
         )
 
@@ -215,26 +259,113 @@ class TestPublicationAdmin:
         assert response.status_code == 200
         assert publication.directory == "/courses/python/"
         assert publication.filename == "llms-full.txt"
-        assert publication.revision_id is None
+        assert publication.revision_id == revision.pk
         assert response.context["selected_document"].pk == document.pk
         assert response.context["candidate"].pk == revision.pk
         assert response.context["publish_form"] is not None
-        assert editor_client.get(publication.get_absolute_url()).content == b""
-
-        publishing = editor_client.post(
-            reverse(
-                viewname="admin:llms_manager_publication_publish",
-                kwargs={"publication_id": publication.pk},
-            ),
-            self._publish_data(revision=revision, expected_revision_id=None),
-        )
-
-        assert publishing.status_code == 302
-        publication.refresh_from_db()
-        assert publication.revision_id == revision.pk
         assert (
             editor_client.get(publication.get_absolute_url()).content == b"# Selected\n"
         )
+
+    @pytest.mark.parametrize("use_current_revision", [False, True])
+    def test_save_and_publish_updates_the_address_and_revision_together(
+        self,
+        document: Document,
+        publication: Publication,
+        editor: AbstractUser,
+        editor_client: Client,
+        change_url: str,
+        use_current_revision: bool,
+    ) -> None:
+        current = Revision.create_from_content(document, "# Current\n", editor)
+        candidate = (
+            current
+            if use_current_revision
+            else Revision.create_from_content(document, "# New\n", editor)
+        )
+        publication.publish(revision=current, expected_revision_id=None)
+        review = editor_client.get(change_url, self._review_data(revision=candidate))
+        assert review.context["publish_form"] is not None
+
+        response = editor_client.post(
+            review.wsgi_request.get_full_path(),
+            self._publish_data(
+                revision=candidate,
+                expected_revision_id=current.pk,
+                directory="courses/python",
+                filename="llms-full.txt",
+            ),
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        publication.refresh_from_db()
+        assert publication.directory == "/courses/python/"
+        assert publication.filename == "llms-full.txt"
+        assert publication.revision_id == candidate.pk
+        assert editor_client.get("/llms.txt").status_code == 404
+        public_response = editor_client.get(publication.get_absolute_url())
+        assert public_response.content.decode() == candidate.read_content()
+
+    @pytest.mark.parametrize("invalid_address", [True, False])
+    def test_invalid_or_occupied_address_does_not_publish(
+        self,
+        document: Document,
+        publication: Publication,
+        editor: AbstractUser,
+        editor_client: Client,
+        change_url: str,
+        invalid_address: bool,
+    ) -> None:
+        current = Revision.create_from_content(document, "# Current\n", editor)
+        candidate = Revision.create_from_content(document, "# Candidate\n", editor)
+        publication.publish(revision=current, expected_revision_id=None)
+        if not invalid_address:
+            Publication.objects.create(directory="/courses/")
+
+        response = editor_client.post(
+            change_url,
+            self._publish_data(
+                revision=candidate,
+                expected_revision_id=current.pk,
+                directory="/../" if invalid_address else "/courses/",
+            ),
+        )
+
+        assert response.status_code == 200
+        assert response.context["adminform"].form.errors
+        publication.refresh_from_db()
+        assert publication.directory == "/"
+        assert publication.filename == "llms.txt"
+        assert publication.revision_id == current.pk
+        assert not LogEntry.objects.exists()
+
+    @pytest.mark.parametrize("different_document", [False, True])
+    def test_changed_selection_requires_another_review(
+        self,
+        document: Document,
+        publication: Publication,
+        editor: AbstractUser,
+        editor_client: Client,
+        change_url: str,
+        different_document: bool,
+    ) -> None:
+        reviewed = Revision.create_from_content(document, "# Reviewed\n", editor)
+        other = Document.objects.create(name="Other document")
+        selected = Revision.create_from_content(
+            other if different_document else document, "# Selected\n", editor
+        )
+        data = self._publish_data(revision=reviewed, expected_revision_id=None)
+        data["document"] = selected.document_id
+        data["revision"] = selected.pk
+
+        response = editor_client.post(change_url, data)
+
+        assert response.status_code == 200
+        assert response.context["adminform"].form.non_field_errors()
+        publication.refresh_from_db()
+        assert publication.revision_id is None
+        assert not LogEntry.objects.exists()
 
     def test_invalid_new_address_keeps_the_selected_revision(
         self, document: Document, editor: AbstractUser, editor_client: Client
@@ -243,22 +374,21 @@ class TestPublicationAdmin:
 
         response = editor_client.post(
             reverse(viewname="admin:llms_manager_publication_add"),
-            {
-                "directory": "/courses/",
-                "filename": "other.txt",
-                "document": document.pk,
-                "revision": revision.pk,
-                "_continue": "1",
-            },
+            self._publish_data(
+                revision=revision,
+                expected_revision_id=None,
+                directory="/courses/",
+                filename="other.txt",
+            ),
         )
 
         assert response.status_code == 200
-        assert "filename" in response.context["adminform"].form.errors
+        assert set(response.context["adminform"].form.errors) == {"filename"}
         assert response.context["selected_document"].pk == document.pk
         assert response.context["candidate"].pk == revision.pk
         assert not Publication.objects.exists()
 
-    def test_top_actions_require_review_before_publishing(
+    def test_the_only_save_action_requires_review_before_publishing(
         self,
         document: Document,
         editor: AbstractUser,
@@ -273,29 +403,32 @@ class TestPublicationAdmin:
 
         assert response.status_code == 200
         html = response.content.decode()
-        save_button = search(r'<input\b[^>]*value="Save address"[^>]*>', html)
-        publish_button = search(r'<input\b[^>]*value="Publish revision"[^>]*>', html)
-        assert save_button is not None
+        save_button = search(r'<input\b[^>]*value="Save"[^>]*>', html)
+        publish_button = search(r'<input\b[^>]*name="_publish"[^>]*>', html)
+        assert save_button is None
         assert publish_button is not None
-        assert 'form="publication_form"' in save_button.group()
-        assert 'name="_continue"' in save_button.group()
-        assert " disabled" not in save_button.group()
+        assert 'form="publication_form"' in publish_button.group()
         assert " disabled" in publish_button.group()
-        assert (
-            save_button.start()
-            < publish_button.start()
-            < html.index('id="publication_form"')
-        )
+        assert publish_button.start() < html.index('id="publication_form"')
+        assert len(findall(r'<input\b[^>]*form="publication_form"[^>]*>', html)) == 1
         assert 'id="llms-publication-publish-form"' not in html
 
-    def test_other_filenames_are_rejected(self, editor_client: Client) -> None:
+    def test_other_filenames_are_rejected(
+        self, document: Document, editor: AbstractUser, editor_client: Client
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Selected\n", editor)
+
         response = editor_client.post(
             reverse(viewname="admin:llms_manager_publication_add"),
-            {"directory": "/", "filename": "other.txt", "_continue": "1"},
+            self._publish_data(
+                revision=revision,
+                expected_revision_id=None,
+                filename="other.txt",
+            ),
         )
 
         assert response.status_code == 200
-        assert "filename" in response.context["adminform"].form.errors
+        assert set(response.context["adminform"].form.errors) == {"filename"}
         assert not Publication.objects.exists()
 
     def test_publication_list_shows_each_independent_revision(
@@ -373,7 +506,6 @@ class TestPublicationAdmin:
         editor: AbstractUser,
         editor_client: Client,
         change_url: str,
-        publish_url: str,
     ) -> None:
         other = Document.objects.create(name="Other <site>")
         full = Publication.objects.create(filename=Publication.Filename.FULL)
@@ -400,16 +532,22 @@ class TestPublicationAdmin:
         html = response.content.decode()
         element_ids = findall(r'\sid="([^"]+)"', html)
         assert len(element_ids) == len(set(element_ids))
-        publish_button = search(r'<input\b[^>]*value="Publish revision"[^>]*>', html)
+        publish_button = search(r'<input\b[^>]*name="_publish"[^>]*>', html)
         assert publish_button is not None
         assert " disabled" not in publish_button.group()
-        assert 'form="llms-publication-publish-form"' in publish_button.group()
+        assert 'form="publication_form"' in publish_button.group()
         assert publish_button.start() < html.index('id="publication_form"')
         assert publish_button.start() < html.index('class="llms-diff"')
-        assert f'action="{publish_url}"' in html
+        form_start = html.index('id="publication_form"')
+        assert (
+            form_start
+            < html.index('name="reviewed_revision"')
+            < html.index("</form>", form_start)
+        )
         publication.refresh_from_db()
         assert publication.revision_id == current.pk
 
+    @pytest.mark.parametrize("publish_from_change_form", [False, True])
     def test_publication_selects_any_revision_and_records_an_admin_log(
         self,
         document: Document,
@@ -418,6 +556,7 @@ class TestPublicationAdmin:
         editor_client: Client,
         publish_url: str,
         change_url: str,
+        publish_from_change_form: bool,
     ) -> None:
         other = Document.objects.create(name="Other document")
         Revision.create_from_content(other, "# Other\n", editor)
@@ -425,7 +564,7 @@ class TestPublicationAdmin:
         Revision.create_from_content(document, "# Latest\n", editor)
 
         response = editor_client.post(
-            publish_url,
+            change_url if publish_from_change_form else publish_url,
             self._publish_data(revision=selected, expected_revision_id=None),
         )
 
@@ -439,6 +578,7 @@ class TestPublicationAdmin:
         review = editor_client.get(response.url)
         assert review.status_code == 200
         assert b"This revision is currently published." in review.content
+        assert b"Ready to publish:" not in review.content
         assert b'class="llms-diff"' not in review.content
         assert b"<details open>" in review.content
         assert f'href="{publication.get_absolute_url()}"'.encode() in review.content
@@ -499,7 +639,12 @@ class TestPublicationAdmin:
 
         response = editor_client.post(
             publish_url,
-            self._publish_data(revision=candidate, expected_revision_id=first.pk),
+            self._publish_data(
+                revision=candidate,
+                expected_revision_id=first.pk,
+                directory="/courses/",
+                filename="llms-full.txt",
+            ),
             follow=True,
         )
 
@@ -508,7 +653,11 @@ class TestPublicationAdmin:
         assert response.context["candidate"].pk == candidate.pk
         assert response.context["published"].pk == replacement.pk
         publication.refresh_from_db()
+        assert publication.directory == "/"
+        assert publication.filename == "llms.txt"
         assert publication.revision_id == replacement.pk
+        assert response.context["adminform"].form["directory"].value() == "/courses/"
+        assert response.context["adminform"].form["filename"].value() == "llms-full.txt"
         assert not LogEntry.objects.exists()
 
     def test_other_addresses_do_not_invalidate_the_review(
@@ -539,7 +688,8 @@ class TestPublicationAdmin:
         assert full.revision_id == candidate.pk
 
     @pytest.mark.parametrize("already_published", [False, True])
-    def test_save_address_preserves_selection_without_publishing(
+    @pytest.mark.parametrize("keep_selection", [False, True])
+    def test_address_cannot_be_saved_without_a_reviewed_revision(
         self,
         document: Document,
         publication: Publication,
@@ -547,6 +697,7 @@ class TestPublicationAdmin:
         editor_client: Client,
         change_url: str,
         already_published: bool,
+        keep_selection: bool,
     ) -> None:
         current = (
             Revision.create_from_content(document, "# Published\n", editor)
@@ -560,55 +711,6 @@ class TestPublicationAdmin:
         response = editor_client.post(
             change_url,
             {
-                "directory": publication.directory,
-                "filename": publication.filename,
-                "document": document.pk,
-                "revision": revision.pk,
-                "_continue": "1",
-            },
-            follow=True,
-        )
-
-        assert response.status_code == 200
-        publication.refresh_from_db()
-        expected_revision_id = current.pk if current else None
-        assert publication.revision_id == expected_revision_id
-        assert response.context["selected_document"].pk == document.pk
-        assert response.context["candidate"].pk == revision.pk
-        assert (
-            response.context["publish_form"]["expected_revision_id"].value()
-            == expected_revision_id
-        )
-        expected_content = b"# Published\n" if current else b""
-        assert (
-            editor_client.get(publication.get_absolute_url()).content
-            == expected_content
-        )
-
-    @pytest.mark.parametrize("keep_selection", [False, True])
-    def test_address_can_be_changed_without_changing_its_revision(
-        self,
-        document: Document,
-        publication: Publication,
-        editor: AbstractUser,
-        editor_client: Client,
-        change_url: str,
-        keep_selection: bool,
-    ) -> None:
-        revision = Revision.create_from_content(document, "# Content\n", editor)
-        publication.publish(revision=revision, expected_revision_id=None)
-        review = editor_client.get(
-            change_url,
-            {
-                "directory": publication.directory,
-                "filename": publication.filename,
-                **self._review_data(revision=revision),
-            },
-        )
-
-        response = editor_client.post(
-            review.wsgi_request.get_full_path(),
-            {
                 "directory": "/courses/",
                 "filename": "llms-full.txt",
                 "document": document.pk if keep_selection else "",
@@ -619,18 +721,23 @@ class TestPublicationAdmin:
         )
 
         assert response.status_code == 200
+        assert response.context["adminform"].form.non_field_errors()
         assert response.context["adminform"].form["directory"].value() == "/courses/"
         assert response.context["adminform"].form["filename"].value() == "llms-full.txt"
-        assert not response.context["address_pending"]
         publication.refresh_from_db()
-        assert publication.revision_id == revision.pk
-        assert publication.get_absolute_url() == "/courses/llms-full.txt"
-        assert editor_client.get("/llms.txt").status_code == 404
+        expected_revision_id = current.pk if current else None
+        assert publication.directory == "/"
+        assert publication.filename == "llms.txt"
+        assert publication.revision_id == expected_revision_id
+        assert editor_client.get("/courses/llms-full.txt").status_code == 404
+        expected_content = b"# Published\n" if current else b""
         assert (
-            editor_client.get(publication.get_absolute_url()).content == b"# Content\n"
+            editor_client.get(publication.get_absolute_url()).content
+            == expected_content
         )
+        assert not LogEntry.objects.exists()
 
-    def test_metadata_save_preserves_a_concurrent_publication(
+    def test_saving_without_the_publish_marker_still_publishes_the_reviewed_revision(
         self,
         document: Document,
         publication: Publication,
@@ -639,40 +746,29 @@ class TestPublicationAdmin:
         change_url: str,
     ) -> None:
         current = Revision.create_from_content(document, "# Current\n", editor)
-        replacement = Revision.create_from_content(document, "# Replacement\n", editor)
+        candidate = Revision.create_from_content(document, "# Candidate\n", editor)
         publication.publish(revision=current, expected_revision_id=None)
-        original_save = Publication.save
+        data = self._publish_data(
+            revision=candidate,
+            expected_revision_id=current.pk,
+            directory="/courses/",
+            filename="llms-full.txt",
+        )
+        data.pop("_publish")
 
-        def save_after_publication(
-            instance: Publication, *args: Any, **kwargs: Any
-        ) -> None:
-            publication.publish(revision=replacement, expected_revision_id=current.pk)
-            return original_save(instance, *args, **kwargs)
+        response = editor_client.post(change_url, data)
 
-        with patch.object(
-            Publication, "save", autospec=True, side_effect=save_after_publication
-        ):
-            response = editor_client.post(
-                change_url,
-                {
-                    "directory": "/courses/",
-                    "filename": publication.filename,
-                    "document": document.pk,
-                    "revision": current.pk,
-                    "_continue": "1",
-                },
-                follow=True,
-            )
-
-        assert response.status_code == 200
+        assert response.status_code == 302
+        assert response.url == change_url
         publication.refresh_from_db()
         assert publication.directory == "/courses/"
-        assert publication.revision_id == replacement.pk
-        assert response.context["candidate"].pk == current.pk
-        assert response.context["published"].pk == replacement.pk
+        assert publication.filename == "llms-full.txt"
+        assert publication.revision_id == candidate.pk
+        assert publication.get_absolute_url() == "/courses/llms-full.txt"
+        assert editor_client.get("/llms.txt").status_code == 404
         assert (
-            response.context["publish_form"]["expected_revision_id"].value()
-            == replacement.pk
+            editor_client.get(publication.get_absolute_url()).content
+            == b"# Candidate\n"
         )
 
     def test_view_permissions_allow_review_but_not_publication(
@@ -707,8 +803,8 @@ class TestPublicationAdmin:
         assert review.status_code == 200
         assert review.context["candidate"].pk == revision.pk
         assert review.context["publish_form"] is None
-        assert b'value="Save address"' not in review.content
-        assert b'value="Publish revision"' not in review.content
+        assert b'value="Save"' not in review.content
+        assert b'name="_publish"' not in review.content
         assert adding.status_code == 403
         assert publishing.status_code == 403
         publication.refresh_from_db()
@@ -813,11 +909,38 @@ class TestPublicationAdmin:
         ):
             editor_client.post(
                 publish_url,
-                self._publish_data(revision=candidate, expected_revision_id=current.pk),
+                self._publish_data(
+                    revision=candidate,
+                    expected_revision_id=current.pk,
+                    directory="/courses/",
+                    filename="llms-full.txt",
+                ),
             )
 
         publication.refresh_from_db()
+        assert publication.directory == "/"
+        assert publication.filename == "llms.txt"
         assert publication.revision_id == current.pk
+
+    def test_admin_log_failure_rolls_back_new_publication(
+        self, document: Document, editor: AbstractUser, editor_client: Client
+    ) -> None:
+        revision = Revision.create_from_content(document, "# Selected\n", editor)
+
+        with (
+            patch(
+                "llms_manager.admin.PublicationAdmin.log_addition",
+                side_effect=RuntimeError("Admin log failed"),
+            ),
+            pytest.raises(RuntimeError, match="Admin log failed"),
+        ):
+            editor_client.post(
+                reverse(viewname="admin:llms_manager_publication_add"),
+                self._publish_data(revision=revision, expected_revision_id=None),
+            )
+
+        assert not Publication.objects.exists()
+        assert not LogEntry.objects.exists()
 
     @pytest.mark.parametrize(
         ("language", "expected_status"),

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.django_db
+@pytest.mark.usefixtures("cache_backend")
 class TestPublicationAdmin:
     """Check named publication configuration, staged review, and guarded publishing."""
 
@@ -63,6 +64,15 @@ class TestPublicationAdmin:
     def media_root(self, settings: Settings, tmp_path: Path) -> Path:
         settings.MEDIA_ROOT = tmp_path
         return tmp_path
+
+    @pytest.fixture
+    def cache_backend(self, settings: Settings, tmp_path: Path) -> None:
+        settings.CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": str(tmp_path),
+            }
+        }
 
     @pytest.fixture(params=["admin", "content_admin"])
     def admin_namespace(
@@ -847,6 +857,7 @@ class TestPublicationAdmin:
         )
         review = editor_client.get(response.url)
         assert review.status_code == 200
+        assert b'class="viewsitelink"' not in review.content
         assert b"This revision is currently published." in review.content
         assert b"Ready to publish:" not in review.content
         assert b'class="llms-diff"' not in review.content

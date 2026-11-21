@@ -17,13 +17,15 @@ from django.urls import Resolver404, resolve
 from llms_manager.models import Document, Publication, Revision
 
 if TYPE_CHECKING:
+    from unittest.mock import MagicMock
+
     from django.contrib.auth.models import AbstractUser
     from pytest_django import Settings
 
 
 @pytest.mark.django_db
 class TestLlmsView:
-    """Check public files, revision caching, independent publishing, and URL routing."""
+    """Check public files, address caching, independent publishing, and URL routing."""
 
     @pytest.fixture
     def document(self) -> Document:
@@ -53,6 +55,13 @@ class TestLlmsView:
         cache.clear()
         yield
         cache.clear()
+
+    @pytest.fixture
+    def cache_clock(self) -> Iterator[MagicMock]:
+        with patch(
+            "django.core.cache.backends.locmem.time.time", return_value=1000
+        ) as clock:
+            yield clock
 
     @pytest.fixture(params=["missing", "invalid_utf8"])
     def damage_file(self, request: pytest.FixtureRequest) -> Callable[[Revision], None]:
@@ -105,6 +114,7 @@ class TestLlmsView:
         client: Client,
         settings: Settings,
         damage_file: Callable[[Revision], None],
+        cache_clock: MagicMock,
     ) -> None:
         settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
         revision = Revision.create_from_content(document, "# Cached\n", None)
@@ -112,20 +122,15 @@ class TestLlmsView:
         url = publication.get_absolute_url()
         storage = revision.file.storage
 
-        with (
-            patch(
-                "django.core.cache.backends.locmem.time.time", return_value=1000
-            ) as clock,
-            patch.object(storage, "open", wraps=storage.open) as open_file,
-        ):
+        with patch.object(storage, "open", wraps=storage.open) as open_file:
             first = client.get(url)
             damage_file(revision)
-            clock.return_value = 1004
+            cache_clock.return_value = 1004
             cached = client.get(url)
             head = client.head(url)
             assert open_file.call_count == 1
 
-            clock.return_value = 1005
+            cache_clock.return_value = 1005
             expired = client.get(url)
 
         assert first.status_code == 200
@@ -162,6 +167,27 @@ class TestLlmsView:
         assert not Document.objects.exists()
         assert not Publication.objects.exists()
 
+    @pytest.mark.parametrize("directory", ["/", "/courses/"])
+    def test_unknown_address_is_not_cached(
+        self, document: Document, client: Client, directory: str
+    ) -> None:
+        url = f"{directory}llms.txt"
+
+        with CaptureQueriesContext(connection) as queries:
+            first = client.get(url)
+            second = client.head(url)
+
+        assert first.status_code == second.status_code == 404
+        assert len(queries) == 2
+
+        revision = Revision.create_from_content(document, "# Published\n", None)
+        Publication.objects.create(directory=directory, revision=revision)
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.content == b"# Published\n"
+
     def test_configured_publication_is_empty_before_first_revision(
         self, publication: Publication, client: Client
     ) -> None:
@@ -174,26 +200,35 @@ class TestLlmsView:
         assert not Document.objects.exists()
 
     @pytest.mark.parametrize("content", ("", "# Проект\n\n> Описание.\n"))
-    def test_published_text_is_cached_while_publication_is_queried(
-        self, document: Document, publication: Publication, client: Client, content: str
+    @pytest.mark.parametrize("directory", ["/", "/courses/python/"])
+    @pytest.mark.parametrize("method", ["get", "head"])
+    def test_cached_text_bypasses_database_and_storage(
+        self,
+        document: Document,
+        client: Client,
+        content: str,
+        directory: str,
+        method: str,
     ) -> None:
+        publication = Publication.objects.create(directory=directory)
         revision = Revision.create_from_content(document, content, None)
         publication.publish(revision=revision, expected_revision_id=None)
         url = publication.get_absolute_url()
         storage = revision.file.storage
 
         with patch.object(storage, "open", wraps=storage.open) as open_file:
-            first = client.get(url)
+            first = getattr(client, method)(url)
             with CaptureQueriesContext(connection) as queries:
                 second = client.get(url)
-                query_count = len(queries)
-            head = client.head(url)
+                head = client.head(url)
 
-        assert first.content == content.encode("utf-8")
-        assert second.content == first.content
-        assert head.status_code == 200
+        for response in (first, second, head):
+            assert response.status_code == 200
+            assert response["Content-Type"] == "text/plain; charset=utf-8"
+        assert first.content == (content.encode("utf-8") if method == "get" else b"")
+        assert second.content == content.encode("utf-8")
         assert head.content == b""
-        assert query_count == 1
+        assert len(queries) == 0
         assert open_file.call_count == 1
 
     @pytest.mark.parametrize(("timeout", "expires_after"), ((None, 60), (5, 5)))
@@ -205,6 +240,7 @@ class TestLlmsView:
         settings: Settings,
         timeout: int | None,
         expires_after: int,
+        cache_clock: MagicMock,
     ) -> None:
         # Leave the setting absent when checking the default lifetime.
         if timeout is not None:
@@ -214,23 +250,22 @@ class TestLlmsView:
         url = publication.get_absolute_url()
         storage = revision.file.storage
 
-        with (
-            patch(
-                "django.core.cache.backends.locmem.time.time", return_value=1000
-            ) as clock,
-            patch.object(storage, "open", wraps=storage.open) as open_file,
-        ):
+        with patch.object(storage, "open", wraps=storage.open) as open_file:
             first = client.get(url)
-            clock.return_value = 1000 + expires_after - 1
-            before_expiry = client.get(url)
+            cache_clock.return_value = 1000 + expires_after - 1
+            with CaptureQueriesContext(connection) as cached_queries:
+                before_expiry = client.get(url)
             assert open_file.call_count == 1
 
-            clock.return_value = 1000 + expires_after
-            after_expiry = client.get(url)
+            cache_clock.return_value = 1000 + expires_after
+            with CaptureQueriesContext(connection) as expired_queries:
+                after_expiry = client.get(url)
 
         assert first.content == b"# Cached\n"
         assert before_expiry.content == first.content
         assert after_expiry.content == first.content
+        assert len(cached_queries) == 0
+        assert len(expired_queries) == 1
         assert open_file.call_count == 2
 
     @pytest.mark.parametrize(
@@ -257,16 +292,21 @@ class TestLlmsView:
         timeout: object,
         emits_warning: bool,
     ) -> None:
-        revision = Revision.create_from_content(document, "# Uncached\n", None)
-        publication.publish(revision=revision, expected_revision_id=None)
+        cached_revision = Revision.create_from_content(document, "# Cached\n", None)
+        publication.publish(revision=cached_revision, expected_revision_id=None)
         url = publication.get_absolute_url()
-        client.get(url)
+        assert client.get(url).content == b"# Cached\n"
+
+        revision = Revision.create_from_content(document, "# Uncached\n", None)
+        publication.publish(revision=revision, expected_revision_id=cached_revision.pk)
+        assert client.get(url).content == b"# Cached\n"
         settings.LLMS_MANAGER_CACHE_TIMEOUT = timeout
         storage = revision.file.storage
 
         with (
             warnings.catch_warnings(record=True) as captured,
             patch.object(storage, "open", wraps=storage.open) as open_file,
+            CaptureQueriesContext(connection) as queries,
         ):
             warnings.simplefilter("default", RuntimeWarning)
             first = client.get(url)
@@ -275,6 +315,7 @@ class TestLlmsView:
         assert first.content == b"# Uncached\n"
         assert second.content == first.content
         assert open_file.call_count == 2
+        assert len(queries) == 2
         runtime_warnings = [
             warning
             for warning in captured
@@ -285,9 +326,15 @@ class TestLlmsView:
             assert "LLMS_MANAGER_CACHE_TIMEOUT" in str(runtime_warnings[0].message)
             assert "caching is disabled" in str(runtime_warnings[0].message)
 
-    def test_publishing_and_restoring_revisions_updates_cached_output_immediately(
-        self, document: Document, publication: Publication, client: Client
+    def test_publishing_and_restoring_revisions_updates_output_after_expiry(
+        self,
+        document: Document,
+        publication: Publication,
+        client: Client,
+        settings: Settings,
+        cache_clock: MagicMock,
     ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
         first = Revision.create_from_content(document, "# First\n", None)
         second = Revision.create_from_content(document, "# Second\n", None)
         url = publication.get_absolute_url()
@@ -295,22 +342,39 @@ class TestLlmsView:
         assert client.get(url).content == b""
 
         publication.publish(revision=first, expected_revision_id=None)
+        with CaptureQueriesContext(connection) as queries:
+            assert client.get(url).content == b""
+        assert len(queries) == 0
+
+        cache_clock.return_value = 1005
         assert client.get(url).content == b"# First\n"
 
         publication.publish(revision=second, expected_revision_id=first.pk)
+        assert client.get(url).content == b"# First\n"
+
+        cache_clock.return_value = 1010
         assert client.get(url).content == b"# Second\n"
 
         publication.publish(revision=first, expected_revision_id=second.pk)
+        assert client.get(url).content == b"# Second\n"
+
+        cache_clock.return_value = 1015
         storage = first.file.storage
         with patch.object(storage, "open", wraps=storage.open) as open_file:
             restored = client.get(url)
 
         assert restored.content == b"# First\n"
-        open_file.assert_not_called()
+        open_file.assert_called_once()
 
-    def test_cached_text_does_not_keep_moved_or_deleted_addresses_available(
-        self, document: Document, publication: Publication, client: Client
+    def test_cached_text_keeps_moved_or_deleted_addresses_until_expiry(
+        self,
+        document: Document,
+        publication: Publication,
+        client: Client,
+        settings: Settings,
+        cache_clock: MagicMock,
     ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
         revision = Revision.create_from_content(document, "# Moved\n", None)
         publication.publish(revision=revision, expected_revision_id=None)
         previous_url = publication.get_absolute_url()
@@ -321,12 +385,59 @@ class TestLlmsView:
         publication.save()
         current_url = publication.get_absolute_url()
 
-        assert client.get(previous_url).status_code == 404
+        cache_clock.return_value = 1001
+        assert client.get(previous_url).content == b"# Moved\n"
         assert client.get(current_url).content == b"# Moved\n"
 
         publication.delete()
 
+        cache_clock.return_value = 1004
+        assert client.get(previous_url).content == b"# Moved\n"
+        assert client.get(current_url).content == b"# Moved\n"
+
+        cache_clock.return_value = 1005
+        assert client.get(previous_url).status_code == 404
+        assert client.get(current_url).content == b"# Moved\n"
+
+        cache_clock.return_value = 1006
         assert client.get(current_url).status_code == 404
+
+    @pytest.mark.parametrize("directory", ["/", "/courses/"])
+    def test_recreated_address_serves_new_publication_after_expiry(
+        self,
+        document: Document,
+        client: Client,
+        settings: Settings,
+        cache_clock: MagicMock,
+        directory: str,
+    ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
+        original = Revision.create_from_content(document, "# Original\n", None)
+        publication = Publication.objects.create(directory=directory, revision=original)
+        url = publication.get_absolute_url()
+        assert client.get(url).content == b"# Original\n"
+
+        cache_clock.return_value = 1001
+        publication.delete()
+        other = Document.objects.create(name="Replacement document")
+        revision = Revision.create_from_content(other, "# Replacement\n", None)
+        replacement = Publication.objects.create(directory=directory, revision=revision)
+        assert replacement.get_absolute_url() == url
+
+        cache_clock.return_value = 1004
+        with CaptureQueriesContext(connection) as cached_queries:
+            cached = client.get(url)
+
+        cache_clock.return_value = 1005
+        with CaptureQueriesContext(connection) as expired_queries:
+            refreshed = client.get(url)
+
+        assert cached.status_code == 200
+        assert cached.content == b"# Original\n"
+        assert len(cached_queries) == 0
+        assert refreshed.status_code == 200
+        assert refreshed.content == b"# Replacement\n"
+        assert len(expired_queries) == 1
 
     def test_draft_is_not_public(
         self,
@@ -391,31 +502,52 @@ class TestLlmsView:
         assert response.status_code == 200
         assert response.content == b"# Content\n"
 
-    def test_publications_select_documents_and_revisions_independently(
+    @pytest.mark.parametrize(
+        ("directory", "filename"),
+        [
+            ("/", "llms-full.txt"),
+            ("/courses/", "llms.txt"),
+            ("/courses/", "llms-full.txt"),
+        ],
+    )
+    def test_publications_cache_selected_revisions_independently(
         self,
         document: Document,
         publication: Publication,
         author: AbstractUser,
         client: Client,
+        settings: Settings,
+        cache_clock: MagicMock,
+        directory: str,
+        filename: str,
     ) -> None:
+        settings.LLMS_MANAGER_CACHE_TIMEOUT = 5
         other = Document.objects.create(name="Other document")
-        full = Publication.objects.create(filename=Publication.Filename.FULL)
+        other_publication = Publication.objects.create(
+            directory=directory, filename=filename
+        )
         root_revision = Revision.create_from_content(document, "# Root\n", author)
         selected = Revision.create_from_content(other, "# Selected\n", author)
         Revision.create_from_content(other, "# Latest draft\n", author)
         publication.publish(revision=root_revision, expected_revision_id=None)
-        full.publish(revision=selected, expected_revision_id=None)
+        other_publication.publish(revision=selected, expected_revision_id=None)
+        other_url = other_publication.get_absolute_url()
 
         assert client.get("/llms.txt").content == b"# Root\n"
-        assert client.get("/llms-full.txt").content == b"# Selected\n"
+        assert client.get(other_url).content == b"# Selected\n"
 
         publication.publish(revision=selected, expected_revision_id=root_revision.pk)
         storage = selected.file.storage
         with patch.object(storage, "open", wraps=storage.open) as open_file:
-            assert client.get("/llms.txt").content == b"# Selected\n"
-            assert client.get("/llms-full.txt").content == b"# Selected\n"
+            assert client.get("/llms.txt").content == b"# Root\n"
+            assert client.get(other_url).content == b"# Selected\n"
+            open_file.assert_not_called()
 
-        open_file.assert_not_called()
+            cache_clock.return_value = 1005
+            assert client.get("/llms.txt").content == b"# Selected\n"
+            assert client.get(other_url).content == b"# Selected\n"
+
+        assert open_file.call_count == 2
 
     @pytest.mark.parametrize(
         "url",

@@ -1,6 +1,6 @@
 [project]
 name = "django-llms-manager"
-version = "0.1.2"
+version = "0.1.3"
 description = "Manage llms.txt content for AI assistants through the Django admin."
 readme = "README.md"
 authors = [{ name = "Artem Fabrikov", email = "a.fabrikov1406@yandex.ru" }]

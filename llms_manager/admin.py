@@ -258,6 +258,7 @@ class PublicationAdmin(admin.ModelAdmin):
     readonly_fields = ("current_document", "revision")
     form = PublicationForm
     change_form_template = "admin/llms_manager/publication_change_form.html"
+    view_on_site = False
 
     class Media:
         """Declare the publication admin stylesheet."""

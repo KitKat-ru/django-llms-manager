@@ -15,32 +15,32 @@ def published_file(request, filename: str, directory: str = "") -> HttpResponse:
     """Serve llms.txt or llms-full.txt for the matching publication.
 
     Match the filename and directory, using "/" when the directory is empty.
-    Cache revision text while resolving the publication on every request.
+    Cache successful publication text by its public address until expiry.
     """
-    publication = get_object_or_404(
-        Publication.objects.select_related("revision"),
-        directory=f"/{directory}/" if directory else "/",
-        filename=filename,
-    )
-    revision = publication.revision
-    content = ""
-    if revision is not None:
-        timeout = get_cache_timeout()
+    directory = f"/{directory}/" if directory else "/"
+    timeout = get_cache_timeout()
+    address_key = sha256(f"{directory}{filename}".encode()).hexdigest()
+    cache_key = f"llms_manager:publication:{address_key}"
+    content = cache.get(cache_key) if timeout else None
+    if content is None:
+        publication = get_object_or_404(
+            Publication.objects.select_related("revision"),
+            directory=directory,
+            filename=filename,
+        )
         try:
-            if not timeout:
-                content = revision.read_content()
-            else:
-                file_key = sha256(revision.file.name.encode("utf-8")).hexdigest()
-                content = cache.get_or_set(
-                    f"llms_manager:revision:{revision.pk}:{file_key}",
-                    revision.read_content,
-                    timeout=timeout,
-                )
+            content = (
+                publication.revision.read_content()
+                if publication.revision is not None
+                else ""
+            )
         except RevisionFileError:
             return HttpResponseBadRequest(
                 "The revision file is corrupted or missing.",
                 content_type="text/plain; charset=utf-8",
             )
+        if timeout:
+            cache.set(cache_key, content, timeout=timeout)
     return HttpResponse(
         content,
         content_type="text/plain; charset=utf-8",

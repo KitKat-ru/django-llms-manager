@@ -78,8 +78,7 @@ addresses and select the revisions served there.
    **Preview revision**.
 4. Click **Save and publish** to save the address and selected revision together.
 
-Saving a publication in the admin requires a previewed revision and publishes it
-immediately.
+Saving a publication in the admin requires a previewed revision and publishes it.
 
 | Directory | File name | Public address |
 | --- | --- | --- |
@@ -123,8 +122,8 @@ file fails.
 
 ## Caching
 
-Revision text uses Django's default cache. Configure the lifetime in seconds
-(default: 60):
+Successful public responses cache their text by directory and file name in
+Django's default cache. Configure the lifetime in seconds (default: 60):
 
 ```python
 LLMS_MANAGER_CACHE_TIMEOUT = 60
@@ -132,10 +131,15 @@ LLMS_MANAGER_CACHE_TIMEOUT = 60
 
 Use a non-negative integer or `None`. Both `0` and `None` disable caching.
 
-Each request resolves the current publication, so a newly published revision is
-served on the next request. Admin previews read directly from storage.
-Cached text remains available until its TTL expires if the storage file is lost
-or damaged.
+A cache hit does not query publications or read revision files. Publishing another
+revision, moving an address, or deleting a publication does not invalidate cached
+text; the previous response can remain available until its TTL expires. Different
+addresses have independent cache entries, even when they serve the same revision.
+
+Only `200` responses are cached, including empty publications. Responses with
+status `404` or `400` are not cached. Cached text also remains available until
+expiry if its storage file is lost or damaged. Admin previews read directly from
+storage. This server-side cache does not add HTTP cache headers.
 
 ## Development
 
@@ -167,8 +171,8 @@ uv run python -m django runserver
 
 Open [the admin](http://127.0.0.1:8000/admin/) or
 [llms.txt](http://127.0.0.1:8000/llms.txt). Before a root publication is created,
-`/llms.txt` returns `404`. Creating a publication through the admin immediately
-serves its selected revision. Local revision files are stored in `media/llms_manager/`.
+`/llms.txt` returns `404`. Create a publication through the admin to serve its
+selected revision. Local revision files are stored in `media/llms_manager/`.
 The development project defaults to Russian (`LANGUAGE_CODE = "ru"` in
 `tests/settings.py`); set it to `"en"` for English.
 
